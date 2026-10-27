@@ -1,0 +1,65 @@
+# ===== 敏感信息 =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+*.license
+minio.license
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+wheels/
+
+# ===== 虚拟环境 =====
+.venv/
+venv/
+ENV/
+
+# ===== uv =====
+# uv.lock 应提交，用于锁定依赖版本
+
+# ===== 测试与覆盖率 =====
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+
+# ===== 类型检查与格式化 =====
+.mypy_cache/
+.dmypy.json
+.ruff_cache/
+.pyre/
+
+# ===== IDE / 编辑器 =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ===== 日志与临时文件 =====
+*.log
+logs/
+tmp/
+temp/
+
+# ===== Docker 数据卷（如本地映射） =====
+data/

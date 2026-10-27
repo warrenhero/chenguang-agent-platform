@@ -1,0 +1,29 @@
+[project]
+name = "chenguang-agent-platform"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "bignorance", email = "694671689@qq.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.20.1",
+    "asyncmy>=0.2.17",
+    "fastapi[standard]==0.135.1",
+    "loguru>=0.7.3",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.1",
+    "sqlalchemy==2.0.48",
+]
+
+[project.scripts]
+chenguang-agent-platform = "src.main:main"
+
+[tool.uv.build-backend]
+module-name = "src"
+module-root = ""
+
+[build-system]
+requires = ["uv_build>=0.12.15,<0.13.0"]
+build-backend = "uv_build"
