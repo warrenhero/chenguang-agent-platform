@@ -1,4 +1,4 @@
-from sqlalchemy import String
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.base_model import BaseModel
@@ -11,3 +11,5 @@ class User(BaseModel):
     email: Mapped[str] = mapped_column(String(100), unique=True, index=True, comment="邮箱")
     hashed_password: Mapped[str] = mapped_column(String(255), comment="密码哈希")
     is_active: Mapped[bool] = mapped_column(default=True, comment="是否启用")
+    is_superuser: Mapped[bool] = mapped_column(default=False, comment="是否为超级管理员")
+    last_login: Mapped[DateTime | None] = mapped_column(DateTime, nullable=True, comment="最后登录时间")

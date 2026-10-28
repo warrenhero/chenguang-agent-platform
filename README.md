@@ -68,3 +68,19 @@ docker compose --project-directory . -f docker/docker-compose.yaml --env-file do
 - 端口绑定 `0.0.0.0`，供远程应用主机连接；**务必使用强密码**，否则同网段任何主机都可直连 MySQL / Redis。
 - 数据卷统一放在项目根的 `docker/` 下：`docker/mysql/data`、`docker/redis/data`、`docker/minio/data`。
 
+## 数据库迁移（Alembic）
+
+改完模型后，在**仓库根目录**、已激活虚拟环境的终端中执行：
+
+```bash
+# 1. 根据模型变更自动生成迁移脚本（脚本落在 alembic/versions/）
+alembic revision --autogenerate -m "add user table"
+
+# 2. 应用到数据库
+alembic upgrade head
+```
+
+- 连接串由 `alembic/env.py` 从 `src/core/config.py` 读取，自动拼装 `DATABASE_URL`，无需改 `alembic.ini`。
+- 新增模块的 model 必须先在 `alembic/env.py` 中 import（如 `import src.modules.user.model`），否则 autogenerate 发现不了新表。
+- autogenerate 生成后**务必人工检查** `alembic/versions/` 下的脚本，确认没有误删字段或漏掉索引，再执行 `upgrade`。
+

@@ -12,11 +12,18 @@ class Settings(BaseSettings):
     DB_PORT: int = 3306
     DB_USER: str = "root"
     # 不设默认值：缺失时启动即报错，避免静默使用弱密码
-    DB_PASSWORD: str
+    DB_PASSWORD: str = ""
     DB_NAME: str = "chenguang"
 
     LOG_LEVEL: str = "DEBUG"
     LOG_DIR: str = "logs"
+
+    # Redis
+    REDIS_HOST: str = "192.168.10.102"
+    REDIS_PORT: int = 6379
+    # 不设默认值：缺失时启动即报错，避免静默使用弱密码
+    REDIS_PASSWORD: str = ""
+    REDIS_DB: int = 0
 
     @property
     def DATABASE_URL(self) -> str:

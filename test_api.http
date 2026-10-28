@@ -1,0 +1,3 @@
+# 查询当前登录用户信息
+GET http://localhost:8000/api/v1/users/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidXNlcm5hbWUiOiJ3eXkiLCJleHAiOjE3OTMxNzIyMTEsImlhdCI6MTc5MzE3MDQxMX0.OyfW5R91LNu1YPpC_7igKa_XOanvLJOiR45P0my70oI
