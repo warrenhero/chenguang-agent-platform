@@ -61,8 +61,8 @@ logs/
 tmp/
 temp/
 
-# ===== Docker 数据卷（如本地映射） =====
-data/
+# ===== Docker 数据卷（如本地映射，仅仓库根目录） =====
+/data/
 
 # ===== 前端依赖与构建产物 =====
 node_modules/
