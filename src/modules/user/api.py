@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.base_schema import ResponseSchema
-from src.core.deps import get_current_user
+from src.core.base_schema import PageResult, ResponseSchema
+from src.core.deps import PageParams, get_current_user
 from src.infra.database import get_db
 from src.modules.user.model import User
 from src.modules.user.schema import (
@@ -28,6 +28,29 @@ async def create_user(
     user = await svc.create_user(data)
     return ResponseSchema(data=UserRead.model_validate(user))
 
+
+# GET  /api/v1/permissions/search?page=1&size=10&keyword=xxx
+@router.get(
+    "/search",
+    response_model=ResponseSchema[PageResult[UserRead]],
+    summary="分页搜索用户",
+)
+async def list_search_result(
+    params: PageParams = Depends(),
+    svc: UserService = Depends(get_user_service),
+):
+    """分页搜索权限"""
+    users, total_count = await svc.search_page(
+        offset=params.offset, limit=params.page_size, keyword=params.keyword
+    )
+    return ResponseSchema(
+        data=PageResult(
+            items=[UserRead.model_validate(u) for u in users],
+            total=total_count,
+            page=params.page,
+            page_size=params.page_size
+        )
+    )
 
 @router.get("/me", response_model=ResponseSchema[UserRead], summary="获取当前登录用户信息")
 async def get_me(current_user: User = Depends(get_current_user)):
@@ -74,3 +97,4 @@ async def get_user_roles(
 ):
     user = await svc.get_user_with_roles(user_id)
     return ResponseSchema(data=[UserWithRolesRead.model_validate(user)])
+

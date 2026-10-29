@@ -65,3 +65,9 @@ class UserService:
         # 和 get_user 一样，但返回的 User 对象会自动带上 roles
         user = await self.get_user(user_id)
         return user
+
+    # 分页搜索
+    async def search_page(
+        self, offset: int, limit: int, keyword: str | None
+    ) -> tuple[list[User], int]:
+        return await self.repo.search_page(offset=offset, limit=limit, keyword=keyword)

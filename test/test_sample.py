@@ -4,5 +4,5 @@ def add(x, y):
 def test_add():
     assert add(2, 3) == 5
 
-def test_add_fail():
-    assert add(2, 2) == 5  # 故意写错的断言，用来演示失败的测试
+def test_add_again():
+    assert add(2, 2) == 4

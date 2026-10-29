@@ -185,3 +185,25 @@ async def test_assign_permissions_role_not_found(client, make_permission):
     )
 
     assert resp.json()["code"] == 404
+
+
+async def test_search_roles(client, make_role):
+    keyword = f"search{uuid.uuid4().hex[:8]}"
+    first = await make_role(code=f"role:{keyword}:1")
+    second = await make_role(code=f"role:{keyword}:2")
+    await make_role()
+
+    resp = await client.get(
+        "/api/v1/roles/search",
+        params={"page": 1, "page_size": 10, "keyword": keyword},
+    )
+
+    body = resp.json()
+    assert body["code"] == 200
+    data = body["data"]
+    assert data["total"] == 2
+    assert data["page"] == 1
+    assert data["page_size"] == 10
+    assert {r["id"] for r in data["items"]} == {first["id"], second["id"]}
+    # 角色搜索结果应返回角色结构（含权限列表）
+    assert "permissions" in data["items"][0]

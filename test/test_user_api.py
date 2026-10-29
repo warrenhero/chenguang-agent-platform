@@ -190,3 +190,45 @@ async def test_get_me_with_invalid_token(client):
 
     body = resp.json()
     assert body["code"] == 401
+
+
+async def test_get_user_roles_empty(client, make_user):
+    user = await make_user()
+
+    resp = await client.get(f"/api/v1/users/{user['id']}/roles")
+
+    body = resp.json()
+    assert body["code"] == 200
+    assert body["data"][0]["id"] == user["id"]
+    assert body["data"][0]["roles"] == []
+
+
+async def test_get_user_roles_not_found(client):
+    resp = await client.get("/api/v1/users/999999999/roles")
+
+    assert resp.json()["code"] == 404
+
+
+async def test_search_users(client, make_user):
+    keyword = f"search{uuid.uuid4().hex[:8]}"
+    first = await make_user(
+        username=f"{keyword}_1", email=f"{keyword}_1@example.com"
+    )
+    second = await make_user(
+        username=f"{keyword}_2", email=f"{keyword}_2@example.com"
+    )
+
+    resp = await client.get(
+        "/api/v1/users/search",
+        params={"page": 1, "page_size": 10, "keyword": keyword},
+    )
+
+    body = resp.json()
+    assert body["code"] == 200
+    data = body["data"]
+    assert data["total"] == 2
+    assert data["page"] == 1
+    assert data["page_size"] == 10
+    assert {u["id"] for u in data["items"]} == {first["id"], second["id"]}
+    # 用户搜索结果应返回用户结构（不含权限字段等）
+    assert "username" in data["items"][0]

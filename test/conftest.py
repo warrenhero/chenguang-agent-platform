@@ -2,11 +2,13 @@ import uuid
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from src.core.config import get_settings
 from src.infra.database import get_db
+from src.infra.redis_cache import get_redis
 from src.main import app
 
 
@@ -30,13 +32,17 @@ async def db_session():
 
 
 @pytest_asyncio.fixture
-async def client(db_session):
-    """把应用的 get_db 依赖替换成测试会话，接口与业务共用同一事务"""
+async def client(db_session, redis_client):
+    """把应用的 get_db/get_redis 依赖替换成测试实例，接口与业务共用同一事务"""
 
     async def override_get_db():
         yield db_session
 
+    async def override_get_redis():
+        return redis_client
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_redis] = override_get_redis
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         try:
@@ -53,7 +59,7 @@ async def make_permission(client):
         description: str | None = None,
     ) -> dict:
         resp = await client.post(
-            "/api/v1/permissions/",
+            "/api/v1/permissions",
             json={
                 "code": code or f"perm:{uuid.uuid4().hex[:8]}",
                 "name": name,
@@ -110,3 +116,36 @@ async def make_user(client):
         return body["data"]
 
     return _make
+
+
+@pytest_asyncio.fixture
+async def redis_client():
+    """每个用例独立的 Redis 客户端，避免连接池跨事件循环复用"""
+    settings = get_settings()
+    client = Redis(
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        db=settings.REDIS_DB,
+        password=settings.REDIS_PASSWORD,
+        decode_responses=True,
+    )
+    yield client
+    await client.aclose()
+
+
+@pytest_asyncio.fixture
+async def make_captcha(redis_client):
+    """在 Redis 中写入一个已知验证码，用例结束清理"""
+    created: list[dict] = []
+
+    async def _make(code: str = "AB12") -> dict:
+        key = f"test:{uuid.uuid4().hex}"
+        await redis_client.set(f"captcha:{key}", code, ex=300)
+        captcha = {"key": key, "code": code}
+        created.append(captcha)
+        return captcha
+
+    yield _make
+
+    for captcha in created:
+        await redis_client.delete(f"captcha:{captcha['key']}")

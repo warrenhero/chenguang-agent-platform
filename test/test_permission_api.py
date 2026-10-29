@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 pytestmark = pytest.mark.asyncio
@@ -5,7 +7,7 @@ pytestmark = pytest.mark.asyncio
 
 async def test_create_permission(client):
     resp = await client.post(
-        "/api/v1/permissions/",
+        "/api/v1/permissions",
         json={"code": "user:read", "name": "用户读取", "description": "读取用户信息"},
     )
 
@@ -24,7 +26,7 @@ async def test_create_permission_duplicate_code(client, make_permission):
     permission = await make_permission(code="dup:code")
 
     resp = await client.post(
-        "/api/v1/permissions/",
+        "/api/v1/permissions",
         json={"code": "dup:code", "name": "重复权限"},
     )
 
@@ -58,7 +60,7 @@ async def test_list_permissions(client, make_permission):
     first = await make_permission(name="列表权限A")
     second = await make_permission(name="列表权限B")
 
-    resp = await client.get("/api/v1/permissions/")
+    resp = await client.get("/api/v1/permissions")
 
     body = resp.json()
     assert body["code"] == 200
@@ -124,3 +126,40 @@ async def test_delete_permission_not_found(client):
     body = resp.json()
     assert body["code"] == 404
     assert body["message"] == "权限不存在"
+
+
+async def test_search_permissions(client, make_permission):
+    keyword = f"search{uuid.uuid4().hex[:8]}"
+    first = await make_permission(code=f"perm:{keyword}:1")
+    second = await make_permission(code=f"perm:{keyword}:2")
+    await make_permission()
+
+    resp = await client.get(
+        "/api/v1/permissions/search",
+        params={"page": 1, "page_size": 1, "keyword": keyword},
+    )
+
+    body = resp.json()
+    assert body["code"] == 200
+    data = body["data"]
+    assert data["total"] == 2
+    assert data["page"] == 1
+    assert data["page_size"] == 1
+    assert len(data["items"]) == 1
+
+    resp = await client.get(
+        "/api/v1/permissions/search",
+        params={"page": 2, "page_size": 1, "keyword": keyword},
+    )
+    second_page = resp.json()["data"]
+    assert second_page["page"] == 2
+    assert len(second_page["items"]) == 1
+
+    ids = {data["items"][0]["id"], second_page["items"][0]["id"]}
+    assert ids == {first["id"], second["id"]}
+
+
+async def test_search_permissions_invalid_page(client):
+    resp = await client.get("/api/v1/permissions/search", params={"page": 0})
+
+    assert resp.status_code == 422
