@@ -10,6 +10,7 @@ from src.infra.database import engine
 from src.middlewares.logging import LoggingMiddleware
 from src.modules.auth.api import router as auth_router
 from src.modules.captcha.api import router as captcha_router
+from src.modules.permission.api import router as permission_router
 from src.modules.user.api import router as user_router
 
 
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(user_router, prefix="/api/v1")
     app.include_router(captcha_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
+    app.include_router(permission_router, prefix="/api/v1")  # 注册权限模块路由
 
     return app
 

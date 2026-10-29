@@ -5,6 +5,8 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import src.modules.permission.model
+import src.modules.role.model
 import src.modules.user.model  # noqa: F401  每新增模块在此导入
 from alembic import context
 
