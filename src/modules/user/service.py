@@ -35,6 +35,10 @@ class UserService:
     async def list_users(self, offset: int = 0, limit: int = 100):
         return await self.repo.get_all(offset=offset, limit=limit)
 
+    async def delete_user(self, user_id: int) -> None:
+        user = await self.get_user(user_id)
+        await self.repo.delete(user)
+
 
     async def assign_roles(self, user_id: int, role_ids: list[int]) -> User:
         # 1. 查找用户，不存在抛异常

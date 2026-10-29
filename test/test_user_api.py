@@ -162,6 +162,28 @@ async def test_assign_roles_user_not_found(client, make_role):
     assert resp.json()["code"] == 404
 
 
+async def test_delete_user(client, make_user):
+    user = await make_user()
+
+    resp = await client.delete(f"/api/v1/users/{user['id']}")
+
+    body = resp.json()
+    assert body["code"] == 200
+    assert body["data"] is None
+
+    # 删除后不可再查询
+    resp = await client.get(f"/api/v1/users/{user['id']}")
+    assert resp.json()["code"] == 404
+
+
+async def test_delete_user_not_found(client):
+    resp = await client.delete("/api/v1/users/999999999")
+
+    body = resp.json()
+    assert body["code"] == 404
+    assert body["message"] == "用户不存在"
+
+
 async def test_get_me_with_token(client, make_user):
     user = await make_user()
     token = encode_jwt({"sub": str(user["id"]), "username": user["username"]})

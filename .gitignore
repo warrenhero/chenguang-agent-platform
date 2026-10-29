@@ -63,3 +63,12 @@ temp/
 
 # ===== Docker 数据卷（如本地映射） =====
 data/
+
+# ===== 前端依赖与构建产物 =====
+node_modules/
+app/dist/
+
+# ===== Playwright / 浏览器测试产物 =====
+.playwright-mcp/
+playwright-report/
+test-results/

@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from src.core.config import get_settings
@@ -38,6 +39,14 @@ def create_app() -> FastAPI:
 
     # 中间件
     app.add_middleware(LoggingMiddleware)
+    # 前端开发服务器跨域访问：放行本机任意端口（localhost / 127.0.0.1）
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # 注册模块路由
     app.include_router(user_router, prefix="/api/v1")

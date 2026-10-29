@@ -89,6 +89,17 @@ async def assign_roles_to_user(
     user = await svc.assign_roles(user_id, role_ids.role_ids)
     return ResponseSchema(data=UserRead.model_validate(user))
 
+@router.delete(
+    "/{user_id}", response_model=ResponseSchema[None], summary="删除用户"
+)
+async def delete_user(
+    user_id: int,
+    svc: UserService = Depends(get_user_service),  # noqa: B008
+):
+    await svc.delete_user(user_id)
+    return ResponseSchema()
+
+
 # GET   /api/v1/users/{user_id}/roles   查看用户的角色列表
 @router.get("/{user_id}/roles", response_model=ResponseSchema[list[UserWithRolesRead]], summary="查看用户的角色列表")
 async def get_user_roles(
