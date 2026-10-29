@@ -20,7 +20,7 @@ def get_role_service(db: AsyncSession = Depends(get_db)) -> RoleService:
 
 
 # POST  /api/v1/roles   创建角色
-@router.post("/roles", response_model=ResponseSchema[RoleRead], summary="创建角色")
+@router.post("", response_model=ResponseSchema[RoleRead], summary="创建角色")
 async def create_role(
     role: RoleCreate,
     service: RoleService = Depends(get_role_service),
@@ -30,7 +30,7 @@ async def create_role(
 
 
 # GET   /api/v1/roles/{role_id} 角色详情（含权限列表）
-@router.get("/roles/{role_id}", response_model=ResponseSchema[RoleRead], summary="获取角色详情")
+@router.get("/{role_id}", response_model=ResponseSchema[RoleRead], summary="获取角色详情")
 async def get_role(
     role_id: int,
     service: RoleService = Depends(get_role_service)
@@ -44,7 +44,7 @@ async def get_role(
 
 
 # GET   /api/v1/roles   角色列表
-@router.get("/roles", response_model=ResponseSchema[list[RoleRead]], summary="获取角色列表")
+@router.get("", response_model=ResponseSchema[list[RoleRead]], summary="获取角色列表")
 async def get_roles(
     service: RoleService = Depends(get_role_service)
 ):
@@ -55,7 +55,7 @@ async def get_roles(
 
 
 # PUT   /api/v1/roles/{role_id} 更新角色
-@router.put("/roles/{role_id}", response_model=ResponseSchema[RoleRead], summary="更新角色")
+@router.put("/{role_id}", response_model=ResponseSchema[RoleRead], summary="更新角色")
 async def update_role(
     role_id: int,
     role: RoleUpdate,
@@ -66,7 +66,7 @@ async def update_role(
 
 
 # DELETE    /api/v1/roles/{role_id} 删除角色
-@router.delete("/roles/{role_id}", response_model=ResponseSchema[None], summary="删除角色")
+@router.delete("/{role_id}", response_model=ResponseSchema[None], summary="删除角色")
 async def delete_role(
     role_id: int,
     service: RoleService = Depends(get_role_service),

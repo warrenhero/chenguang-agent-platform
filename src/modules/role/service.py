@@ -17,7 +17,7 @@ class RoleService:
         # 检查 code 是否已存在
         role = await self.repo.get_by_code(data.code)
         if role:
-            raise BizException(f"角色 {data.code}-{data.name} 已经存在")
+            raise BizException(message=f"角色 {data.code}-{data.name} 已经存在")
 
         role = Role(**data.model_dump())
         role = await self.repo.create(role)
@@ -27,7 +27,7 @@ class RoleService:
         # 查不到抛异常
         role = await self.repo.get_by_id(role_id)
         if not role:
-            raise BizException(f"角色 {role_id} 不存在")
+            raise BizException(code=404, message=f"角色 {role_id} 不存在")
         return role
 
     async def list_roles(self) -> list[Role]:
@@ -38,14 +38,17 @@ class RoleService:
         # 查不到抛异常
         role = await self.get_role(role_id)
         if not role:
-            raise BizException(f"角色 {role_id} 不存在")
+            raise BizException(code=404, message=f"角色 {role_id} 不存在")
         role.name = data.name or role.name
         role.description = data.description or role.description
         role = await self.repo.update(role)
         return role
 
     async def delete_role(self, role_id: int) -> None:
-        await self.repo.delete(role_id)
+        role = await self.get_role(role_id)
+        if not role:
+            raise BizException(code=404, message="角色不存在")
+        await self.repo.delete(role)
         return None
 
     async def assign_permissions(self, role_id: int, permission_ids: list[int]) -> Role:
@@ -53,13 +56,17 @@ class RoleService:
         # 1. 查找角色，不存在抛异常
         role = await self.get_role(role_id)
         if not role:
-            raise BizException(f"角色 {role_id} 不存在")
-        # 2. 根据 permission_ids 批量查询 Permission 对象
-        permission_list = await self.permission_repo.get_by_ids(permission_ids)
-        
+            raise BizException(code=404, message=f"角色 {role_id} 不存在")
+        # 2. 逐个查询 Permission，过滤掉不存在的 ID
+        permission_list = [
+            p
+            for pid in permission_ids
+            if (p := await self.permission_repo.get_by_id(pid)) is not None
+        ]
+
         # 3. 校验：如果查到的数量 != 传入的数量，说明有无效 ID，抛异常
         if len(permission_list) != len(permission_ids):
-            raise BizException(f"权限 ID 列表中包含无效 ID")
+            raise BizException(message="权限 ID 列表中包含无效 ID")
         
         # 4. 直接替换角色的权限列表：role.permissions = permission_list
         role.permissions = permission_list
