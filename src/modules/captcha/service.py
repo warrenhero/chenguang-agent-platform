@@ -1,10 +1,11 @@
 import base64
-import random
+import secrets
 import string
 import uuid
 
 from captcha.image import ImageCaptcha
 from redis.asyncio import Redis
+from starlette.concurrency import run_in_threadpool
 
 from src.core.exceptions import BizException
 from src.modules.captcha.schema import CaptchaRead, VerifyCaptchaRequest
@@ -26,7 +27,7 @@ class CaptchaService:
         chars = (
             chars.replace("O", "").replace("0", "").replace("I", "").replace("1", "")
         )
-        return "".join(random.choices(chars, k=length))
+        return "".join(secrets.choice(chars) for _ in range(length))
 
     # 创建验证码
     async def create_captcha(self) -> CaptchaRead:
@@ -42,8 +43,14 @@ class CaptchaService:
         # ======以上该服务端保存验证码到redis完成======
         # ======生成验证码图片，并编码为base64字符串======
         # 5.生成验证码图片
-        image_captcha = ImageCaptcha(width=162, height=54)
-        image_data = image_captcha.generate(code)
+        # image_captcha = ImageCaptcha(width=162, height=54)
+        # image_data = image_captcha.generate(code)
+        # 5.1 使用线程池执行耗时操作
+        def _render(code: str) -> str:  # 同步小函数
+            image_captcha = ImageCaptcha(width=162, height=54)
+            image_data = image_captcha.generate(code)
+            return image_data
+        image_data = await run_in_threadpool(_render, code)
         b64 = base64.b64encode(image_data.read()).decode()
         # 6.返回验证码响应模型
         return CaptchaRead(key=captcha_id, images=f"data:image/png;base64,{b64}")

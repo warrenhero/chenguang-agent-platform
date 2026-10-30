@@ -1,3 +1,4 @@
+from src.core.deps import require_permission
 from src.core.base_schema import PageResult
 from src.core.deps import PageParams
 from fastapi import APIRouter, Depends
@@ -20,7 +21,10 @@ def get_permission_service(db: AsyncSession = Depends(get_db)) -> PermissionServ
 
 
 @router.get(
-    "", response_model=ResponseSchema[list[PermissionRead]], summary="获取所有权限列表"
+    "",
+    response_model=ResponseSchema[list[PermissionRead]],
+    summary="获取所有权限列表",
+    dependencies=[Depends(require_permission("permission:read"))],
 )
 async def list_permissions(
     service: PermissionService = Depends(get_permission_service),
@@ -30,7 +34,12 @@ async def list_permissions(
     return ResponseSchema(data=[PermissionRead.model_validate(p) for p in permissions])
 
 
-@router.post("", response_model=ResponseSchema[PermissionRead], summary="创建权限")
+@router.post(
+    "",
+    response_model=ResponseSchema[PermissionRead],
+    summary="创建权限",
+    dependencies=[Depends(require_permission("permission:create"))],
+)
 async def create_permission(
     data: PermissionCreate, service: PermissionService = Depends(get_permission_service)
 ):
@@ -44,6 +53,7 @@ async def create_permission(
     "/search",
     response_model=ResponseSchema[PageResult[PermissionRead]],
     summary="分页搜索权限",
+    dependencies=[Depends(require_permission("permission:read"))],
 )
 async def list_search_result(
     params: PageParams = Depends(),
@@ -67,6 +77,7 @@ async def list_search_result(
     "/{permission_id}",
     response_model=ResponseSchema[PermissionRead],
     summary="根据 ID 获取权限详情",
+    dependencies=[Depends(require_permission("permission:read"))],
 )
 async def get_permission(
     permission_id: int, service: PermissionService = Depends(get_permission_service)
@@ -80,6 +91,7 @@ async def get_permission(
     "/{permission_id}",
     response_model=ResponseSchema[PermissionRead],
     summary="更新权限",
+    dependencies=[Depends(require_permission("permission:update"))],
 )
 async def update_permission(
     permission_id: int,
@@ -92,7 +104,10 @@ async def update_permission(
 
 
 @router.delete(
-    "/{permission_id}", response_model=ResponseSchema[None], summary="删除权限"
+    "/{permission_id}",
+    response_model=ResponseSchema[None],
+    summary="删除权限",
+    dependencies=[Depends(require_permission("permission:delete"))],
 )
 async def delete_permission(
     permission_id: int, service: PermissionService = Depends(get_permission_service)

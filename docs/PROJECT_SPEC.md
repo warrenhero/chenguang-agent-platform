@@ -223,9 +223,9 @@ User ──M:N──> Role ──M:N──> Permission
 
 1. 前端 `GET /api/v1/captcha` 获取验证码：返回 `{key, images}`（`images` 为 `data:image/png;base64,...`）
 2. 前端 `POST /api/v1/auth/login` 提交 `{username, password, captcha_key, captcha_code}`
-3. 后端：校验验证码（Redis，校验后立即删除防重试）→ 查询用户 → 校验密码（bcrypt）→ 更新 `last_login` → 签发 JWT（30 分钟有效，`sub` 为用户 id 字符串）
+3. 后端：校验验证码（Redis，校验后立即删除防重试）→ 按 IP 限流（20 次/分钟）→ 检查账号失败计数（5 次/15 分钟，达到上限直接 429，不再校验密码）→ 查询用户 → 校验密码（bcrypt）→ 登录成功后清除该账号失败计数 → 更新 `last_login` → 签发 JWT（默认 30 分钟有效，`sub` 为用户 id 字符串）
 4. 前端后续请求携带 `Authorization: Bearer <token>`
-5. 受保护接口通过 `Depends(get_current_user)` 解析 token 获取当前用户（校验存在性与 is_active）
+5. 受保护接口通过 `Depends(get_current_user)` 解析 token 获取当前用户（校验存在性与 is_active），管理接口再经 `require_permission` 校验权限码（见 4.8）
 
 ### 4.6 依赖注入模式
 
@@ -267,6 +267,32 @@ class UserRepository(BaseRepository[User]):
 - user：`["username", "email"]`
 - role：`["name", "code"]`
 - permission：`["name", "code"]`
+
+### 4.8 RBAC 权限校验与初始化
+
+校验链：JWT → 用户存在且 `is_active` → 超级管理员直接放行 → 合并用户所有角色的权限码，包含目标编码才放行，否则 403。
+
+接口与权限码对应：
+
+| 接口 | 权限码 |
+|------|--------|
+| `POST /users` | `user:create` |
+| `GET /users`、`GET /users/search`、`GET /users/{id}`、`GET /users/{id}/roles` | `user:read` |
+| `PUT /users/{id}/roles` | `user:assign` |
+| `DELETE /users/{id}` | `user:delete` |
+| `POST /roles` | `role:create` |
+| `GET /roles`、`GET /roles/search`、`GET /roles/{id}` | `role:read` |
+| `PUT /roles/{id}` | `role:update` |
+| `DELETE /roles/{id}` | `role:delete` |
+| `PUT /roles/{id}/permissions` | `role:assign` |
+| `GET /permissions`、`GET /permissions/search`、`GET /permissions/{id}` | `permission:read` |
+| `POST /permissions` | `permission:create` |
+| `PUT /permissions/{id}` | `permission:update` |
+| `DELETE /permissions/{id}` | `permission:delete` |
+
+`GET /users/me` 仅要求登录。`GET /roles/{id}` 与列表一致使用 `role:read`（早期误配为 `role:update`，已修正）。
+
+启动引导：`src/core/bootstrap.py` 在应用启动时幂等执行——补齐上述权限编码、维护 `admin` 角色绑定全部权限、按 `BOOTSTRAP_SUPERUSER_*` 创建或提升超级管理员。全新环境执行 `alembic upgrade head` 后启动即可获得可登录的管理员，无需手工改库。新增受保护接口时，需同步补充权限码到 `DEFAULT_PERMISSIONS`。
 
 ---
 
@@ -482,6 +508,19 @@ MINIO_ROOT_PASSWORD=minioadmin123
 
 LOG_LEVEL=DEBUG
 LOG_DIR=logs
+
+# JWT：无默认值，长度 >= 32 且不能是占位值，否则启动即 ValidationError
+JWT_SECRET_KEY=<openssl rand -hex 32 生成>
+JWT_ALGORITHM=HS256          # 仅支持 HS256/HS384/HS512
+JWT_EXPIRE_MINUTES=30        # >= 1
+
+# 限流（Redis）
+RATE_LIMIT_ENABLED=true      # 测试环境可关闭
+
+# RBAC 初始管理员：首次启动创建/提升；创建成功后建议移除密码
+BOOTSTRAP_SUPERUSER_USERNAME=
+BOOTSTRAP_SUPERUSER_PASSWORD=
+BOOTSTRAP_SUPERUSER_EMAIL=
 ```
 > `.env.example` 中 APP_NAME 为 `MyApp`、DB_HOST 为 `127.0.0.1`、密码为 `change-me`，复制后按需修改。
 
@@ -526,7 +565,7 @@ npm run dev
 
 ### 测试
 ```bash
-pytest                    # test/ 下共 10 个用例文件（auth/captcha/health/jwt/password/permission/role/user 等）
+pytest                    # test/ 下共 15 个用例文件，覆盖认证、RBAC 权限、限流、配置校验、JWT、密码等
 ```
 
 ---
@@ -575,9 +614,9 @@ pytest                    # test/ 下共 10 个用例文件（auth/captcha/healt
 1. 所有 ORM 模型继承 `BaseModel`，自带 `id`, `created_at`, `updated_at`
 2. 所有 Repository 继承 `BaseRepository[T]`，自带基础 CRUD 与 `get_page()`
 3. 统一响应格式 `ResponseSchema(code=200, message="success", data=...)`
-4. 业务异常用 `raise BizException(code=xxx, message="xxx")`，全局处理器返回 **HTTP 200 + 非 200 code**；未捕获异常返回 HTTP 500
+4. 业务异常用 `raise BizException(code=xxx, message="xxx")`，全局处理器把 `code` 映射为 HTTP 状态（401/403/404/429，其余 400），响应体保持 `{code, message, data}`；未捕获异常返回 HTTP 500
 5. 数据库会话通过 `Depends(get_db)` 注入，正常结束自动 commit，异常自动 rollback
-6. JWT 密钥硬编码在 `jwt_utils.py`（生产环境需移至环境变量）
+6. JWT 密钥、算法、有效期均来自 `.env`：密钥长度需 >= 32 且不能是 `change-me` 等占位值，算法仅限 HS256/HS384/HS512，有效期 >= 1 分钟；不满足时启动即 `ValidationError`
 7. 新增模块遵循 `api → service → repository → model/schema` 分层
 8. 路由注册在 `src/main.py` 的 `create_app()` 中
 9. 新增 model 后必须在 `alembic/env.py` 中 import，否则 autogenerate 发现不了新表
@@ -604,14 +643,17 @@ alembic downgrade -1
 | 部分 | 状态 | 说明 |
 |------|------|------|
 | 后端 RBAC | ✅ 已完成 | User/Role/Permission 完整 CRUD（含用户删除）+ 关联 + 分页搜索 |
-| 后端认证 | ✅ 已完成 | 登录 + JWT + 验证码 |
+| 后端认证 | ✅ 已完成 | 登录 + JWT + 验证码 + 登录限流 |
+| RBAC 权限校验 | ✅ 已完成 | 管理接口全部挂 `require_permission`；角色详情使用 `role:read` |
+| RBAC 启动引导 | ✅ 已完成 | 幂等补齐权限、`admin` 角色绑定、按环境变量创建初始超级管理员 |
+| 登录限流 | ✅ 已完成 | IP 20 次/分钟；账号失败 5 次/15 分钟，成功登录清零；Redis 故障 fail-open |
 | 后端 Agent/Model/Prompt/知识库/工具/对话/统计 | ❌ 待实现 | 前端 Mock 层已定义接口契约 |
 | 前端全部页面 | ✅ 已完成 | 使用 Mock 数据，UI 完整 |
 | 系统管理分页 | ✅ 已完成 | 用户/角色/权限列表均为服务端分页，支持关键词搜索、每页条数切换、删除后页码回退 |
 | 前端 Mock 数据层 | ✅ 已完成 | 所有模块 Mock Service + 静态数据 |
 | 前端 API 数据层 | ✅ 已实现 | 各模块 api service 均已编写，等待后端接口 |
 | 前后端对接 | ⚠️ 部分完成 | 登录、验证码、系统管理（用户/角色/权限）、个人资料已对接；其余模块待后端实现 |
-| 自动化测试 | ✅ 已有 | `test/` 下 10 个 pytest 用例，覆盖 RBAC 与认证 |
+| 自动化测试 | ✅ 已有 | `test/` 下 15 个 pytest 用例文件、78 个用例，覆盖 RBAC、认证、限流与配置校验 |
 
 ---
 
@@ -624,14 +666,30 @@ alembic downgrade -1
 3. ~~**后端缺少删除用户接口**~~ **已修复**：新增 `DELETE /api/v1/users/{id}`，前端删除按钮可直接使用。
 4. ~~**`GET /users/{id}` 返回不含角色**~~ **已修复**：分配角色弹窗改用 `GET /users/{id}/roles`（返回只含一个元素的列表）。
 5. **列表接口存在两套**：`GET ""` 返回全量 list（offset/limit 参数），`GET /search` 才是标准分页；新增列表接口应统一走 `/search` 的 `PageParams + PageResult` 模式。
-6. **JWT 密钥硬编码**于 `src/utils/jwt_utils.py`。
+6. ~~**JWT 密钥硬编码**~~ **已修复（2026-10-30）**：密钥/算法/有效期迁至 `.env`，启动时校验长度、占位值与算法白名单。
 7. `pyproject.toml` 中的脚本入口 `chenguang-agent-platform = "src.main:main"` 对应的 `main()` 已被注释，该入口当前不可用。
 8. `Role.description` / `Permission.description` 标注为 `Mapped[str]` 但 `nullable=True`，类型与可空性不符。
 9. ~~**前端类型检查仍有历史错误**~~ **已修复（2026-10-30）**：统一了 `types/system.ts`、`types/conversation.ts`、`types/analytics.ts` 与实际 Mock 数据/页面字段，`tsc -b` 0 错误、`npm run build` 通过。剩余 `npm run lint` 的 48 个错误/24 个警告属规则类问题（`no-explicit-any`、`react-hooks`），不影响构建。
+10. 登录仍可能通过响应时间区分用户名是否存在：用户不存在时未执行 bcrypt，耗时明显短于密码错误路径。
+11. 限流 IP 取 `request.client.host`，部署在反向代理/网关后可能拿到代理地址，导致全站共享同一限额；需配合 `--proxy-headers` 与可信代理解析 `X-Forwarded-For`。
+12. 限流阈值（登录 IP 20/分钟、账号 5 次/15 分钟、验证码 10/分钟）硬编码在业务代码中，尚未配置化。
 
 ---
 
 ## 十三、变更记录
+
+### 2026-10-30 安全加固与 RBAC 引导
+
+| 类型 | 内容 |
+|------|------|
+| 后端修复 | 角色详情 `GET /roles/{id}` 权限由 `role:update` 修正为 `role:read` |
+| 后端新增 | JWT 配置启动校验：拒绝占位密钥、算法限 HS256/HS384/HS512、有效期 >= 1 分钟 |
+| 后端新增 | `src/core/bootstrap.py` 启动时幂等补齐权限码、维护 `admin` 角色、按环境变量创建/提升初始超级管理员 |
+| 后端修复 | 登录限流重构：拆分为只读检查/失败计数/成功清零，账号锁定在密码校验前生效；改用 Lua 原子脚本，去除对 `EXPIRE NX`（Redis 7+）的依赖 |
+| 后端修复 | 业务异常按 `code` 映射 HTTP 状态（401/403/404/429，其余 400），修复前端 `!res.ok` 时不解析错误体的问题 |
+| 后端修复 | `get_current_user` 显式 `selectinload` 角色与权限，避免权限校验时懒加载 |
+| 测试新增 | RBAC 权限守卫、限流、启动引导、JWT 配置校验用例；测试客户端默认以超级管理员身份请求 |
+| 文档 | `docs/swagger-openapi.json` 增加全部受保护接口的 `security`、权限码说明与 401/403/429 响应 |
 
 ### 2026-10-30 接口对接补全
 

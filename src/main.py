@@ -4,10 +4,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
+from src.core.bootstrap import bootstrap_rbac
 from src.core.config import get_settings
 from src.core.exceptions import register_exception_handlers
 from src.core.logger import setup_logger
-from src.infra.database import engine
+from src.infra.database import AsyncSessionLocal, engine
 from src.middlewares.logging import LoggingMiddleware
 from src.modules.auth.api import router as auth_router
 from src.modules.captcha.api import router as captcha_router
@@ -22,6 +23,14 @@ async def lifespan(app: FastAPI):
     setup_logger()
     settings = get_settings()
     logger.info(f"{settings.APP_NAME} starting | env={settings.APP_ENV}")
+    # 幂等初始化权限/角色/初始管理员，避免 RBAC 上线后无人可登录管理
+    async with AsyncSessionLocal() as db:
+        await bootstrap_rbac(
+            db,
+            superuser_username=settings.BOOTSTRAP_SUPERUSER_USERNAME,
+            superuser_password=settings.BOOTSTRAP_SUPERUSER_PASSWORD,
+            superuser_email=settings.BOOTSTRAP_SUPERUSER_EMAIL,
+        )
     yield
     await engine.dispose()
     logger.info(f"{settings.APP_NAME} shutdown")

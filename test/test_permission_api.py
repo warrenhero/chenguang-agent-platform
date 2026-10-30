@@ -6,9 +6,10 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_create_permission(client):
+    code = f"perm:create:{uuid.uuid4().hex[:8]}"
     resp = await client.post(
         "/api/v1/permissions",
-        json={"code": "user:read", "name": "用户读取", "description": "读取用户信息"},
+        json={"code": code, "name": "用户读取", "description": "读取用户信息"},
     )
 
     assert resp.status_code == 200
@@ -17,7 +18,7 @@ async def test_create_permission(client):
     assert body["message"] == "success"
     data = body["data"]
     assert isinstance(data["id"], int)
-    assert data["code"] == "user:read"
+    assert data["code"] == code
     assert data["name"] == "用户读取"
     assert data["description"] == "读取用户信息"
 

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 class LoginRequest(BaseModel):
     username: str = Field(..., description="用户名")
-    password: str = Field(..., description="密码")
+    password: str = Field(..., max_length=64, description="密码")
     captcha_key: str = Field(..., description="验证码 key")
     captcha_code: str = Field(..., description="验证码 code")
 

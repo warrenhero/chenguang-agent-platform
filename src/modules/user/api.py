@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.base_schema import PageResult, ResponseSchema
-from src.core.deps import PageParams, get_current_user
+from src.core.deps import PageParams, get_current_user, require_permission
 from src.infra.database import get_db
 from src.modules.user.model import User
 from src.modules.user.schema import (
@@ -20,7 +20,12 @@ def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:  # noqa
     return UserService(db)
 
 
-@router.post("", response_model=ResponseSchema[UserRead], summary="创建用户")
+@router.post(
+    "",
+    response_model=ResponseSchema[UserRead],
+    summary="创建用户",
+    dependencies=[Depends(require_permission("user:create"))],
+)
 async def create_user(
     data: UserCreate,
     svc: UserService = Depends(get_user_service),  # noqa: B008
@@ -34,6 +39,7 @@ async def create_user(
     "/search",
     response_model=ResponseSchema[PageResult[UserRead]],
     summary="分页搜索用户",
+    dependencies=[Depends(require_permission("user:read"))],
 )
 async def list_search_result(
     params: PageParams = Depends(),
@@ -48,18 +54,24 @@ async def list_search_result(
             items=[UserRead.model_validate(u) for u in users],
             total=total_count,
             page=params.page,
-            page_size=params.page_size
+            page_size=params.page_size,
         )
     )
 
-@router.get("/me", response_model=ResponseSchema[UserRead], summary="获取当前登录用户信息")
+
+@router.get(
+    "/me", response_model=ResponseSchema[UserRead], summary="获取当前登录用户信息"
+)
 async def get_me(current_user: User = Depends(get_current_user)):
     """获取当前登录用户信息(需要 token)"""
     return ResponseSchema(data=UserRead.model_validate(current_user))
 
 
 @router.get(
-    "/{user_id}", response_model=ResponseSchema[UserRead], summary="获取用户信息"
+    "/{user_id}",
+    response_model=ResponseSchema[UserRead],
+    summary="获取用户信息",
+    dependencies=[Depends(require_permission("user:read"))],
 )
 async def get_user(
     user_id: int,
@@ -69,7 +81,12 @@ async def get_user(
     return ResponseSchema(data=UserRead.model_validate(user))
 
 
-@router.get("", response_model=ResponseSchema[list[UserRead]], summary="获取用户列表")
+@router.get(
+    "",
+    response_model=ResponseSchema[list[UserRead]],
+    summary="获取用户列表",
+    dependencies=[Depends(require_permission("user:read"))],
+)
 async def list_users(
     offset: int = 0,
     limit: int = 100,
@@ -80,7 +97,12 @@ async def list_users(
 
 
 # PUT   /api/v1/users/{user_id}/roles   给用户分配角色
-@router.put("/{user_id}/roles", response_model=ResponseSchema[UserRead], summary="给用户分配角色")
+@router.put(
+    "/{user_id}/roles",
+    response_model=ResponseSchema[UserRead],
+    summary="给用户分配角色",
+    dependencies=[Depends(require_permission("user:assign"))],
+)
 async def assign_roles_to_user(
     user_id: int,
     role_ids: UserAssignRoles,
@@ -89,9 +111,13 @@ async def assign_roles_to_user(
     user = await svc.assign_roles(user_id, role_ids.role_ids)
     return ResponseSchema(data=UserRead.model_validate(user))
 
+
 @router.delete(
-    "/{user_id}", response_model=ResponseSchema[None], summary="删除用户"
-)
+    "/{user_id}", 
+    response_model=ResponseSchema[None], 
+    summary="删除用户",
+    dependencies=[Depends(require_permission("user:delete"))]
+    )
 async def delete_user(
     user_id: int,
     svc: UserService = Depends(get_user_service),  # noqa: B008
@@ -101,11 +127,15 @@ async def delete_user(
 
 
 # GET   /api/v1/users/{user_id}/roles   查看用户的角色列表
-@router.get("/{user_id}/roles", response_model=ResponseSchema[list[UserWithRolesRead]], summary="查看用户的角色列表")
+@router.get(
+    "/{user_id}/roles",
+    response_model=ResponseSchema[list[UserWithRolesRead]],
+    summary="查看用户的角色列表",
+    dependencies=[Depends(require_permission("user:read"))]
+)
 async def get_user_roles(
     user_id: int,
     svc: UserService = Depends(get_user_service),
 ):
     user = await svc.get_user_with_roles(user_id)
     return ResponseSchema(data=[UserWithRolesRead.model_validate(user)])
-

@@ -9,11 +9,15 @@ class BizException(Exception):
         self.code = code
         self.message = message
 
+
+# 业务码与 HTTP 状态保持一致，网关/前端可依据状态码做统一处理
+_HTTP_STATUS = {401: 401, 403: 403, 404: 404, 429: 429}
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(BizException)
     async def biz_exception_handler(request: Request, exc: BizException):
         return JSONResponse(
-            status_code=200,
+            status_code=_HTTP_STATUS.get(exc.code, 400),
             content={"code": exc.code, "message": exc.message, "data": None},
         )
 

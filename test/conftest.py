@@ -1,4 +1,11 @@
+import os
 import uuid
+
+# 必须在导入 src 之前设置：jwt_utils 在导入时读取并校验 JWT_SECRET
+# 环境变量优先级高于 .env，测试固定用假密钥，不依赖本地真实配置
+os.environ.setdefault("JWT_SECRET_KEY", "x" * 64)
+# 测试中关闭限流，避免用例之间互相计数
+os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -10,6 +17,8 @@ from src.core.config import get_settings
 from src.infra.database import get_db
 from src.infra.redis_cache import get_redis
 from src.main import app
+from src.modules.user.model import User
+from src.utils.jwt_utils import encode_jwt
 
 
 @pytest_asyncio.fixture
@@ -32,8 +41,31 @@ async def db_session():
 
 
 @pytest_asyncio.fixture
-async def client(db_session, redis_client):
-    """把应用的 get_db/get_redis 依赖替换成测试实例，接口与业务共用同一事务"""
+async def superuser_headers(db_session):
+    """在测试事务内创建一个超级管理员，后续请求默认携带其 token。
+
+    受保护接口需要权限，普通用例不必关心 RBAC 细节；
+    需要验证匿名/无权限路径的用例改用 anon_client 或传入其他用户的 token。
+    """
+    suffix = uuid.uuid4().hex[:8]
+    user = User(
+        username=f"admin_{suffix}",
+        email=f"admin_{suffix}@example.com",
+        hashed_password="not-used",
+        is_superuser=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    token = encode_jwt({"sub": str(user.id), "username": user.username})
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def client(db_session, redis_client, superuser_headers):
+    """把应用的 get_db/get_redis 依赖替换成测试实例，接口与业务共用同一事务。
+
+    默认以超级管理员身份请求；需要匿名访问时使用 anon_client。
+    """
 
     async def override_get_db():
         yield db_session
@@ -44,11 +76,21 @@ async def client(db_session, redis_client):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_redis] = override_get_redis
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers=superuser_headers
+    ) as c:
         try:
             yield c
         finally:
             app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def anon_client(client):
+    """复用 client 的依赖覆盖，但不带任何认证头。"""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
 
 
 @pytest_asyncio.fixture

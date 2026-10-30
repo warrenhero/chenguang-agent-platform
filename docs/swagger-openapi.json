@@ -2,7 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "辰光Agent",
-    "version": "0.1.0"
+    "version": "0.1.0",
+    "description": "统一响应体：`{code, message, data}`。业务错误的 HTTP 状态与 `code` 保持一致（401 未认证、403 无权限、404 不存在、429 触发限流，其余为 400），未捕获异常返回 500。受保护接口需携带 `Authorization: Bearer <token>`，并按操作要求的权限码校验，超级管理员自动放行。"
   },
   "paths": {
     "/api/v1/users": {
@@ -12,6 +13,11 @@
         ],
         "summary": "创建用户",
         "operationId": "create_user_api_v1_users_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -42,8 +48,15 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "description": "需要权限：`user:create`（超级管理员自动放行）。"
       },
       "get": {
         "tags": [
@@ -51,6 +64,11 @@
         ],
         "summary": "获取用户列表",
         "operationId": "list_users_api_v1_users_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "offset",
@@ -93,8 +111,15 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "description": "需要权限：`user:read`（超级管理员自动放行）。"
       }
     },
     "/api/v1/users/search": {
@@ -103,8 +128,13 @@
           "User"
         ],
         "summary": "分页搜索用户",
-        "description": "分页搜索权限",
+        "description": "需要权限：`user:read`（超级管理员自动放行）。",
         "operationId": "list_search_result_api_v1_users_search_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "page",
@@ -172,6 +202,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
         }
       }
@@ -182,7 +218,7 @@
           "User"
         ],
         "summary": "获取当前登录用户信息",
-        "description": "获取当前登录用户信息(需要 token)",
+        "description": "需要登录（任意已认证用户）。",
         "operationId": "get_me_api_v1_users_me_get",
         "responses": {
           "200": {
@@ -194,6 +230,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
           }
         },
         "security": [
@@ -210,6 +249,11 @@
         ],
         "summary": "获取用户信息",
         "operationId": "get_user_api_v1_users__user_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "user_id",
@@ -241,8 +285,15 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "description": "需要权限：`user:read`（超级管理员自动放行）。"
       },
       "delete": {
         "tags": [
@@ -250,6 +301,11 @@
         ],
         "summary": "删除用户",
         "operationId": "delete_user_api_v1_users__user_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "user_id",
@@ -281,8 +337,15 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "description": "需要权限：`user:delete`（超级管理员自动放行）。"
       }
     },
     "/api/v1/users/{user_id}/roles": {
@@ -292,6 +355,11 @@
         ],
         "summary": "给用户分配角色",
         "operationId": "assign_roles_to_user_api_v1_users__user_id__roles_put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "user_id",
@@ -333,8 +401,15 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "description": "需要权限：`user:assign`（超级管理员自动放行）。"
       },
       "get": {
         "tags": [
@@ -342,6 +417,11 @@
         ],
         "summary": "查看用户的角色列表",
         "operationId": "get_user_roles_api_v1_users__user_id__roles_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "user_id",
@@ -373,8 +453,15 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "description": "需要权限：`user:read`（超级管理员自动放行）。"
       }
     },
     "/api/v1/captcha": {
@@ -395,6 +482,9 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "触发限流"
           }
         }
       }
@@ -478,6 +568,9 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "触发限流"
           }
         }
       }
@@ -488,7 +581,7 @@
           "Permission"
         ],
         "summary": "获取所有权限列表",
-        "description": "获取所有权限",
+        "description": "需要权限：`permission:read`（超级管理员自动放行）。",
         "operationId": "list_permissions_api_v1_permissions_get",
         "responses": {
           "200": {
@@ -500,15 +593,26 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       },
       "post": {
         "tags": [
           "Permission"
         ],
         "summary": "创建权限",
-        "description": "创建权限",
+        "description": "需要权限：`permission:create`（超级管理员自动放行）。",
         "operationId": "create_permission_api_v1_permissions_post",
         "requestBody": {
           "content": {
@@ -540,8 +644,19 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/permissions/search": {
@@ -550,8 +665,13 @@
           "Permission"
         ],
         "summary": "分页搜索权限",
-        "description": "分页搜索权限",
+        "description": "需要权限：`permission:read`（超级管理员自动放行）。",
         "operationId": "list_search_result_api_v1_permissions_search_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "page",
@@ -619,6 +739,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
         }
       }
@@ -629,8 +755,13 @@
           "Permission"
         ],
         "summary": "根据 ID 获取权限详情",
-        "description": "根据 ID 获取权限",
+        "description": "需要权限：`permission:read`（超级管理员自动放行）。",
         "operationId": "get_permission_api_v1_permissions__permission_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "permission_id",
@@ -662,6 +793,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
         }
       },
@@ -670,8 +807,13 @@
           "Permission"
         ],
         "summary": "更新权限",
-        "description": "更新权限",
+        "description": "需要权限：`permission:update`（超级管理员自动放行）。",
         "operationId": "update_permission_api_v1_permissions__permission_id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "permission_id",
@@ -713,6 +855,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
         }
       },
@@ -721,8 +869,13 @@
           "Permission"
         ],
         "summary": "删除权限",
-        "description": "删除权限",
+        "description": "需要权限：`permission:delete`（超级管理员自动放行）。",
         "operationId": "delete_permission_api_v1_permissions__permission_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "permission_id",
@@ -754,6 +907,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
         }
       }
@@ -775,8 +934,20 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "description": "需要权限：`role:read`（超级管理员自动放行）。"
       },
       "post": {
         "tags": [
@@ -814,8 +985,20 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "description": "需要权限：`role:create`（超级管理员自动放行）。"
       }
     },
     "/api/v1/roles/search": {
@@ -824,8 +1007,13 @@
           "Role"
         ],
         "summary": "分页搜索角色",
-        "description": "分页搜索权限",
+        "description": "需要权限：`role:read`（超级管理员自动放行）。",
         "operationId": "list_search_result_api_v1_roles_search_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "page",
@@ -893,6 +1081,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
         }
       }
@@ -904,6 +1098,11 @@
         ],
         "summary": "获取角色详情",
         "operationId": "get_role_api_v1_roles__role_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "role_id",
@@ -935,8 +1134,15 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "description": "需要权限：`role:read`（超级管理员自动放行）。"
       },
       "put": {
         "tags": [
@@ -944,6 +1150,11 @@
         ],
         "summary": "更新角色",
         "operationId": "update_role_api_v1_roles__role_id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "role_id",
@@ -985,8 +1196,15 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "description": "需要权限：`role:update`（超级管理员自动放行）。"
       },
       "delete": {
         "tags": [
@@ -994,6 +1212,11 @@
         ],
         "summary": "删除角色",
         "operationId": "delete_role_api_v1_roles__role_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "role_id",
@@ -1025,8 +1248,15 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "description": "需要权限：`role:delete`（超级管理员自动放行）。"
       }
     },
     "/api/v1/roles/{role_id}/permissions": {
@@ -1036,6 +1266,11 @@
         ],
         "summary": "给角色分配权限",
         "operationId": "update_role_permissions_api_v1_roles__role_id__permissions_put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "role_id",
@@ -1077,8 +1312,15 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "未认证或 token 无效"
+          },
+          "403": {
+            "description": "缺少所需权限"
           }
-        }
+        },
+        "description": "需要权限：`role:assign`（超级管理员自动放行）。"
       }
     },
     "/health": {
@@ -1090,9 +1332,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-
-                }
+                "schema": {}
               }
             }
           }
@@ -1143,6 +1383,7 @@
           },
           "password": {
             "type": "string",
+            "maxLength": 64,
             "title": "Password",
             "description": "密码"
           },
@@ -1876,6 +2117,8 @@
         "properties": {
           "username": {
             "type": "string",
+            "maxLength": 50,
+            "minLength": 2,
             "title": "Username"
           },
           "email": {
@@ -1885,6 +2128,8 @@
           },
           "password": {
             "type": "string",
+            "maxLength": 64,
+            "minLength": 6,
             "title": "Password"
           }
         },
@@ -2025,9 +2270,7 @@
         "type": "oauth2",
         "flows": {
           "password": {
-            "scopes": {
-
-            },
+            "scopes": {},
             "tokenUrl": "/api/v1/auth/login"
           }
         }

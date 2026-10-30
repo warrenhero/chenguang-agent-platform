@@ -84,3 +84,14 @@ alembic upgrade head
 - 新增模块的 model 必须先在 `alembic/env.py` 中 import（如 `import src.modules.user.model`），否则 autogenerate 发现不了新表。
 - autogenerate 生成后**务必人工检查** `alembic/versions/` 下的脚本，确认没有误删字段或漏掉索引，再执行 `upgrade`。
 
+## 首次启动与 RBAC 引导
+
+执行 `alembic upgrade head` 后直接启动应用即可。应用启动时会幂等执行 `src/core/bootstrap.py`：
+
+- 补齐接口使用的全部权限编码（`user:read`、`role:assign` 等）
+- 创建 `admin` 角色并绑定全部权限
+- 按 `.env` 中的 `BOOTSTRAP_SUPERUSER_USERNAME` / `BOOTSTRAP_SUPERUSER_PASSWORD` 创建初始超级管理员（账号已存在则提升为超级管理员）
+
+初始管理员创建成功后，建议从 `.env` 中移除密码并重启。后续新增受保护接口时，记得把权限编码加入 `DEFAULT_PERMISSIONS`，否则新权限不会自动入库。
+
+

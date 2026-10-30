@@ -27,12 +27,17 @@ class ApiClient {
       window.location.href = '/login'
       throw new Error('Unauthorized')
     }
-    if (!res.ok) throw new Error(`API Error: ${res.status}`)
-    const json = await res.json()
-    // 业务错误码
-    if (json.code !== undefined && json.code !== 200 && json.code !== 0) {
+    // 业务错误也可能带非 2xx 状态码，先解析 body 以保留后端返回的错误信息
+    let json: any = null
+    try {
+      json = await res.json()
+    } catch {
+      json = null
+    }
+    if (json && json.code !== undefined && json.code !== 200 && json.code !== 0) {
       throw new Error(json.message || '请求失败')
     }
+    if (!res.ok) throw new Error(`API Error: ${res.status}`)
     return json.data !== undefined ? json.data : json
   }
 

@@ -41,7 +41,7 @@ async def test_login_wrong_password(client, make_user, make_captcha):
 
     body = resp.json()
     assert body["code"] == 400
-    assert body["message"] == "密码错误"
+    assert body["message"] == "用户名或密码错误"
 
 
 async def test_login_user_not_found(client, make_captcha):
@@ -59,7 +59,7 @@ async def test_login_user_not_found(client, make_captcha):
 
     body = resp.json()
     assert body["code"] == 400
-    assert body["message"] == "用户不存在"
+    assert body["message"] == "用户名或密码错误"
 
 
 async def test_login_wrong_captcha(client, make_user, make_captcha):

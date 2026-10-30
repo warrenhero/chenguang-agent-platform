@@ -198,14 +198,14 @@ async def test_get_me_with_token(client, make_user):
     assert body["data"]["id"] == user["id"]
 
 
-async def test_get_me_without_token(client):
-    resp = await client.get("/api/v1/users/me")
+async def test_get_me_without_token(anon_client):
+    resp = await anon_client.get("/api/v1/users/me")
 
     assert resp.status_code == 401
 
 
-async def test_get_me_with_invalid_token(client):
-    resp = await client.get(
+async def test_get_me_with_invalid_token(anon_client):
+    resp = await anon_client.get(
         "/api/v1/users/me",
         headers={"Authorization": "Bearer not-a-valid-token"},
     )
