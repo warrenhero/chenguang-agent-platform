@@ -1,10 +1,11 @@
-from src.core.deps import require_permission
 from fastapi import APIRouter, Depends
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.base_schema import PageResult, ResponseSchema
-from src.core.deps import PageParams
+from src.core.deps import PageParams, require_permission
 from src.infra.database import get_db
+from src.infra.redis_cache import get_redis
 from src.modules.permission.schema import PermissionRead
 from src.modules.role.schema import (
     RoleAssignPermissions,
@@ -17,8 +18,11 @@ from src.modules.role.service import RoleService
 router = APIRouter(prefix="/roles", tags=["Role"])
 
 
-def get_role_service(db: AsyncSession = Depends(get_db)) -> RoleService:
-    return RoleService(db)
+def get_role_service(
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> RoleService:
+    return RoleService(db, redis)
 
 
 # POST  /api/v1/roles   创建角色

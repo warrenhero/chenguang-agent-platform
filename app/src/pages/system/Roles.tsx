@@ -115,11 +115,13 @@ function AssignPermissionsDialog({ open, role, onClose, onSaved }: {
   const [allPerms, setAllPerms] = useState<BackendPermission[]>([])
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!open || !role) return
     apiSystemService.getPermissions().then(setAllPerms)
     setSelectedIds(role.permissions.map(p => p.id))
+    setError('')
   }, [open, role])
 
   const toggle = (id: number) =>
@@ -127,9 +129,13 @@ function AssignPermissionsDialog({ open, role, onClose, onSaved }: {
 
   const handleSave = async () => {
     if (!role) return
-    setLoading(true)
-    try { await apiSystemService.assignRolePermissions(role.id as number, selectedIds); onSaved(); onClose() }
-    finally { setLoading(false) }
+    setLoading(true); setError('')
+    try {
+      await apiSystemService.assignRolePermissions(role.id as number, selectedIds)
+      onSaved(); onClose()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : '保存失败')
+    } finally { setLoading(false) }
   }
 
   if (!open) return null
@@ -148,6 +154,7 @@ function AssignPermissionsDialog({ open, role, onClose, onSaved }: {
               </label>
             ))}
           </div>
+          {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose} disabled={loading}>取消</Button>
             <Button onClick={handleSave} disabled={loading}>{loading ? '保存中...' : '保存'}</Button>

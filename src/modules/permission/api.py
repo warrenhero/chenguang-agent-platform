@@ -2,10 +2,12 @@ from src.core.deps import require_permission
 from src.core.base_schema import PageResult
 from src.core.deps import PageParams
 from fastapi import APIRouter, Depends
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.base_schema import ResponseSchema
 from src.infra.database import get_db
+from src.infra.redis_cache import get_redis
 from src.modules.permission.schema import (
     PermissionCreate,
     PermissionRead,
@@ -16,8 +18,11 @@ from src.modules.permission.service import PermissionService
 router = APIRouter(prefix="/permissions", tags=["Permission"])
 
 
-def get_permission_service(db: AsyncSession = Depends(get_db)) -> PermissionService:
-    return PermissionService(db)
+def get_permission_service(
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> PermissionService:
+    return PermissionService(db, redis)
 
 
 @router.get(

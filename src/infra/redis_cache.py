@@ -11,7 +11,11 @@ redis_pool = redis.ConnectionPool(
     db=settings.REDIS_DB,
     password=settings.REDIS_PASSWORD,
     decode_responses=True,
-    encoding="utf-8"
+    encoding="utf-8",
+    # 缓存属于认证链路，连接挂起时必须有上限，避免请求无限期阻塞
+    socket_connect_timeout=2,
+    socket_timeout=2,
+    health_check_interval=30,
 )
 
 # 模块级别创建 Redis 客户端实例（复用连接池）

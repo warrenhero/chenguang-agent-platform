@@ -1,3 +1,4 @@
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import BizException
@@ -6,12 +7,15 @@ from src.modules.user.model import User
 from src.modules.user.repository import UserRepository
 from src.modules.user.schema import UserCreate
 from src.utils.password_utils import hash_password_async
+from src.utils.permission_cache import PermissionCache
 
 
 class UserService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis: Redis | None = None):
+        self.db = db
         self.repo = UserRepository(db)
         self.role_repo = RoleRepository(db)
+        self.perm_cache = PermissionCache(redis) if redis else None
 
     async def create_user(self, data: UserCreate) -> User:
         if await self.repo.get_by_username(data.username):
@@ -38,6 +42,10 @@ class UserService:
     async def delete_user(self, user_id: int) -> None:
         user = await self.get_user(user_id)
         await self.repo.delete(user)
+        # 先提交再失效，避免并发请求把提交前的旧数据写回缓存
+        await self.db.commit()
+        if self.perm_cache:
+            await self.perm_cache.delete_user_cache(user_id)
 
 
     async def assign_roles(self, user_id: int, role_ids: list[int]) -> User:
@@ -58,7 +66,12 @@ class UserService:
         
         # 5. flush + refresh
         await self.repo.update(user)
-        
+
+        # 先提交再失效，避免并发请求把提交前的旧权限写回缓存
+        await self.db.commit()
+        if self.perm_cache:
+            await self.perm_cache.delete_user_cache(user_id)
+
         # 6. 返回 user
         return user
 

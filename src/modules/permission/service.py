@@ -1,13 +1,20 @@
+from redis.asyncio import Redis
+from sqlalchemy import select
+
 from src.core.exceptions import BizException
 from src.infra.database import AsyncSession
 from src.modules.permission.model import Permission
 from src.modules.permission.repository import PermissionRepository
 from src.modules.permission.schema import PermissionCreate, PermissionUpdate
+from src.modules.role.model import role_permissions, user_roles
+from src.utils.permission_cache import PermissionCache
 
 
 class PermissionService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis: Redis | None = None):
+        self.db = db
         self.repo = PermissionRepository(db)
+        self.perm_cache = PermissionCache(redis) if redis else None
 
     async def create_permission(self, data: PermissionCreate) -> Permission:
         # 1. 检查 code 是否已存在，已存在则抛 BizException
@@ -54,9 +61,27 @@ class PermissionService:
         permission = await self.get_permission(permission_id)
         if not permission:
             raise BizException(code=404, message="权限不存在")
-        # 2. 调用 repo.delete()
+        # 2. 删除前记录受影响用户：级联删除后关联表已查不到
+        affected_user_ids = await self._user_ids_for_permission(permission_id)
+        # 3. 调用 repo.delete()
         await self.repo.delete(permission)
+        await self.db.commit()
+        if self.perm_cache:
+            await self.perm_cache.delete_user_cache_batch(affected_user_ids)
         return None
+
+    async def _user_ids_for_permission(self, permission_id: int) -> list[int]:
+        stmt = (
+            select(user_roles.c.user_id)
+            .distinct()
+            .join(
+                role_permissions,
+                role_permissions.c.role_id == user_roles.c.role_id,
+            )
+            .where(role_permissions.c.permission_id == permission_id)
+        )
+        result = await self.db.execute(stmt)
+        return [row[0] for row in result.fetchall()]
 
     # 分页搜索
     async def search_page(

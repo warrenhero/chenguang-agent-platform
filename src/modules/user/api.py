@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.base_schema import PageResult, ResponseSchema
 from src.core.deps import PageParams, get_current_user, require_permission
 from src.infra.database import get_db
+from src.infra.redis_cache import get_redis
 from src.modules.user.model import User
 from src.modules.user.schema import (
     UserAssignRoles,
@@ -16,8 +18,11 @@ from src.modules.user.service import UserService
 router = APIRouter(prefix="/users", tags=["User"])
 
 
-def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:  # noqa: B008
-    return UserService(db)
+def get_user_service(
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+    ) -> UserService:  
+    return UserService(db, redis)
 
 
 @router.post(
