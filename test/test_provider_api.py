@@ -28,6 +28,20 @@ async def _create(client, **overrides) -> dict:
     return body["data"]
 
 
+async def _create_model(client, provider_id: int) -> dict:
+    resp = await client.post(
+        "/api/v1/models",
+        json={
+            "name": f"模型_{uuid.uuid4().hex[:8]}",
+            "model_id": f"model-{uuid.uuid4().hex[:8]}",
+            "provider_id": provider_id,
+        },
+    )
+    body = resp.json()
+    assert body["code"] == 200, body
+    return body["data"]
+
+
 class _FakeResponse:
     status_code = 200
 
@@ -119,6 +133,31 @@ async def test_list_returns_decrypted_api_key_and_model_count(client):
     item = next(i for i in body["data"]["items"] if i["id"] == created["id"])
     assert item["api_key"] == "sk-plaintext-secret"
     assert item["model_count"] == 0
+
+
+async def test_model_count_reflects_owned_models(client):
+    provider = await _create(client)
+    first_model = await _create_model(client, provider["id"])
+    await _create_model(client, provider["id"])
+
+    list_resp = await client.get("/api/v1/providers")
+    list_item = next(
+        i for i in list_resp.json()["data"]["items"] if i["id"] == provider["id"]
+    )
+    detail_body = (
+        await client.get(f"/api/v1/providers/{provider['id']}")
+    ).json()
+
+    assert list_item["model_count"] == 2
+    assert detail_body["data"]["model_count"] == 2
+
+    delete_resp = await client.delete(f"/api/v1/models/{first_model['id']}")
+    assert delete_resp.json()["code"] == 200
+
+    detail_body = (
+        await client.get(f"/api/v1/providers/{provider['id']}")
+    ).json()
+    assert detail_body["data"]["model_count"] == 1
 
 
 async def test_delete_provider(client, db_session):

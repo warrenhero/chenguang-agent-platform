@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.base_repository import BaseRepository
@@ -19,12 +19,17 @@ class ProviderRepository(BaseRepository[ModelProvider]):
         return result.scalar_one_or_none()
 
     async def count_models(self, provider_id: int) -> int:
-        """统计供应商下的模型数量。
+        """统计供应商下的模型数量。"""
+        # 局部导入：model.model 在模块底部导入 provider.model，模块级导入会成环
+        from src.modules.model.model import LLMModel
 
-        模型模块尚未实现（当前无 models 表），先返回 0；模型表落地后改为
-        select(func.count()).select_from(Model).where(Model.provider_id == provider_id)
-        """
-        return 0
+        stmt = (
+            select(func.count())
+            .select_from(LLMModel)
+            .where(LLMModel.provider_id == provider_id)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one()
 
     async def search_page(
         self, offset: int, limit: int, keyword: str | None
