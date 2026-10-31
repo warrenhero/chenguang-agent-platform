@@ -1,6 +1,7 @@
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.modules.permission.model import Permission
 from src.modules.role.model import Role
@@ -22,6 +23,10 @@ DEFAULT_PERMISSIONS: list[tuple[str, str, str]] = [
     ("permission:create", "权限创建", "创建权限"),
     ("permission:update", "权限更新", "更新权限"),
     ("permission:delete", "权限删除", "删除权限"),
+    ("provider:read", "供应商读取", "查看供应商"),
+    ("provider:create", "供应商创建", "创建供应商"),
+    ("provider:update", "供应商更新", "更新供应商与测试连接"),
+    ("provider:delete", "供应商删除", "删除供应商"),
 ]
 
 ADMIN_ROLE_CODE = "admin"
@@ -51,13 +56,24 @@ async def apply_rbac_seed(
     permissions = (await db.execute(select(Permission))).scalars().all()
 
     admin_role = (
-        await db.execute(select(Role).where(Role.code == ADMIN_ROLE_CODE))
+        await db.execute(
+            select(Role)
+            .where(Role.code == ADMIN_ROLE_CODE)
+            .options(selectinload(Role.permissions))
+        )
     ).scalar_one_or_none()
     if admin_role is None:
-        admin_role = Role(code=ADMIN_ROLE_CODE, name="超级管理员", description="拥有全部权限")
+        # 新建时直接带上权限，避免 flush 后再赋值触发异步环境下的懒加载
+        admin_role = Role(
+            code=ADMIN_ROLE_CODE,
+            name="超级管理员",
+            description="拥有全部权限",
+            permissions=list(permissions),
+        )
         db.add(admin_role)
         await db.flush()
-    admin_role.permissions = list(permissions)
+    else:
+        admin_role.permissions = list(permissions)
 
     if superuser_username and superuser_password:
         user = (

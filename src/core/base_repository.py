@@ -39,6 +39,12 @@ class BaseRepository(Generic[T]):  # noqa: UP046
         await self.db.delete(obj)
         await self.db.flush()
 
+    async def delete_by_id(self, id: int) -> None:
+        obj = await self.get_by_id(id)
+        if obj is not None:
+            await self.db.delete(obj)
+            await self.db.flush()
+
     # 通用分页 + 模糊搜索
     # userRepository.get_page(0,10,"admin",["username", "email"])  # 继承自 BaseRepository
     # permRepository.get_page(0,10,"list",["code", "name"])  # 继承自 BaseRepository

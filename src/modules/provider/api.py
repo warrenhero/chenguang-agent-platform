@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.base_schema import PageResult, ResponseSchema
-from src.core.deps import PageParams
+from src.core.deps import PageParams, require_permission
 from src.infra.database import get_db
 from src.modules.provider.schema import ProviderCreate, ProviderRead, ProviderUpdate
 from src.modules.provider.service import ProviderService
@@ -15,16 +15,26 @@ def get_provider_service(db: AsyncSession = Depends(get_db)) -> ProviderService:
     return ProviderService(db)
 
 
-@router.post("", response_model=ResponseSchema[ProviderRead], summary="创建供应商")
+@router.post(
+    "",
+    response_model=ResponseSchema[ProviderRead],
+    summary="创建供应商",
+    dependencies=[Depends(require_permission("provider:create"))],
+)
 async def create_provider(
     data: ProviderCreate,
     svc: ProviderService = Depends(get_provider_service),
 ):
     provider = await svc.create_provider(data)
-    return ResponseSchema(data=ProviderRead.model_validate(provider))
+    return ResponseSchema(data=provider)
 
 
-@router.get("", response_model=ResponseSchema[PageResult[ProviderRead]], summary="供应商列表")
+@router.get(
+    "",
+    response_model=ResponseSchema[PageResult[ProviderRead]],
+    summary="供应商列表",
+    dependencies=[Depends(require_permission("provider:read"))],
+)
 async def list_providers(
     params: PageParams = Depends(),
     svc: ProviderService = Depends(get_provider_service),
@@ -33,26 +43,41 @@ async def list_providers(
     return ResponseSchema(data=page_result)
 
 
-@router.get("/{provider_id}", response_model=ResponseSchema[ProviderRead], summary="供应商详情")
+@router.get(
+    "/{provider_id}",
+    response_model=ResponseSchema[ProviderRead],
+    summary="供应商详情",
+    dependencies=[Depends(require_permission("provider:read"))],
+)
 async def get_provider(
     provider_id: int,
     svc: ProviderService = Depends(get_provider_service),
 ):
     provider = await svc.get_provider(provider_id)
-    return ResponseSchema(data=ProviderRead.model_validate(provider))
+    return ResponseSchema(data=provider)
 
 
-@router.put("/{provider_id}", response_model=ResponseSchema[ProviderRead], summary="更新供应商")
+@router.put(
+    "/{provider_id}",
+    response_model=ResponseSchema[ProviderRead],
+    summary="更新供应商",
+    dependencies=[Depends(require_permission("provider:update"))],
+)
 async def update_provider(
     provider_id: int,
     data: ProviderUpdate,
     svc: ProviderService = Depends(get_provider_service),
 ):
     provider = await svc.update_provider(provider_id, data)
-    return ResponseSchema(data=ProviderRead.model_validate(provider))
+    return ResponseSchema(data=provider)
 
 
-@router.delete("/{provider_id}", response_model=ResponseSchema, summary="删除供应商")
+@router.delete(
+    "/{provider_id}",
+    response_model=ResponseSchema,
+    summary="删除供应商",
+    dependencies=[Depends(require_permission("provider:delete"))],
+)
 async def delete_provider(
     provider_id: int,
     svc: ProviderService = Depends(get_provider_service),
@@ -61,7 +86,12 @@ async def delete_provider(
     return ResponseSchema(message="删除成功")
 
 
-@router.post("/{provider_id}/test", response_model=ResponseSchema[dict], summary="测试连接")
+@router.post(
+    "/{provider_id}/test",
+    response_model=ResponseSchema[dict],
+    summary="测试连接",
+    dependencies=[Depends(require_permission("provider:update"))],
+)
 async def test_connection(
     provider_id: int,
     svc: ProviderService = Depends(get_provider_service),

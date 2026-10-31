@@ -8,7 +8,7 @@ class ModelProvider(BaseModel):
     """模型供应商表"""
     __tablename__ = "model_providers"
 
-    name: Mapped[str] = mapped_column(String(100), comment="供应商名称")
+    name: Mapped[str] = mapped_column(String(100), unique=True, comment="供应商名称")
     type: Mapped[str] = mapped_column(
         String(50), comment="供应商类型: openai/anthropic/aliyun/azure/local/custom"
     )

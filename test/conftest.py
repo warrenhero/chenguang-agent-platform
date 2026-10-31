@@ -1,3 +1,4 @@
+import asyncio
 import os
 import uuid
 
@@ -7,24 +8,72 @@ os.environ.setdefault("JWT_SECRET_KEY", "x" * 64)
 # 测试中关闭限流，避免用例之间互相计数
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from src.core.base_model import Base
 from src.core.config import get_settings
 from src.infra.database import get_db
 from src.infra.redis_cache import get_redis
 from src.main import app
+import src.modules.permission.model  # noqa: F401  确保测试库建表覆盖全部模型
+import src.modules.provider.model  # noqa: F401
+import src.modules.role.model  # noqa: F401
 from src.modules.user.model import User
 from src.utils.jwt_utils import encode_jwt
+
+# 测试使用独立数据库，避免事务回滚后自增 ID 仍被消耗、污染开发库
+TEST_DB_NAME = f"{get_settings().DB_NAME}_test"
+
+
+def _database_url(db_name: str) -> str:
+    settings = get_settings()
+    return (
+        f"mysql+asyncmy://{settings.DB_USER}:{settings.DB_PASSWORD}"
+        f"@{settings.DB_HOST}:{settings.DB_PORT}/{db_name}?charset=utf8mb4"
+    )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def prepare_test_database():
+    """创建独立测试库并按 ORM 模型重建表结构。"""
+
+    async def _prepare() -> None:
+        settings = get_settings()
+        admin_engine = create_async_engine(
+            _database_url(settings.DB_NAME), isolation_level="AUTOCOMMIT"
+        )
+        async with admin_engine.connect() as conn:
+            await conn.execute(
+                text(
+                    f"CREATE DATABASE IF NOT EXISTS `{TEST_DB_NAME}` "
+                    "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+                )
+            )
+        await admin_engine.dispose()
+
+        engine = create_async_engine(
+            _database_url(TEST_DB_NAME), poolclass=NullPool
+        )
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+        await engine.dispose()
+
+    asyncio.run(_prepare())
 
 
 @pytest_asyncio.fixture
 async def db_session():
     """每个用例包在一个外层事务里，用例结束回滚，不污染数据库"""
-    engine = create_async_engine(get_settings().DATABASE_URL, poolclass=NullPool)
+    engine = create_async_engine(
+        _database_url(TEST_DB_NAME), poolclass=NullPool
+    )
     async with engine.connect() as conn:
         trans = await conn.begin()
         session = AsyncSession(
