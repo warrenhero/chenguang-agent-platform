@@ -27,6 +27,14 @@ DEFAULT_PERMISSIONS: list[tuple[str, str, str]] = [
     ("provider:create", "供应商创建", "创建供应商"),
     ("provider:update", "供应商更新", "更新供应商与测试连接"),
     ("provider:delete", "供应商删除", "删除供应商"),
+    ("model:read", "模型读取", "查看模型"),
+    ("model:create", "模型创建", "添加模型"),
+    ("model:update", "模型更新", "更新模型"),
+    ("model:delete", "模型删除", "删除模型"),
+    ("prompt:read", "Prompt读取", "查看 Prompt 与版本"),
+    ("prompt:create", "Prompt创建", "创建 Prompt"),
+    ("prompt:update", "Prompt更新", "更新、发布与回滚 Prompt"),
+    ("prompt:delete", "Prompt删除", "删除 Prompt"),
 ]
 
 ADMIN_ROLE_CODE = "admin"
