@@ -185,3 +185,109 @@ async def test_list_models_rejects_page_size_over_limit(client):
     resp = await client.get("/api/v1/models", params={"page_size": 101})
 
     assert resp.status_code == 422, resp.text
+
+
+async def test_create_model_rejects_overlong_name(client):
+    provider = await _create_provider(client)
+    payload = _model_payload(provider["id"])
+    payload["name"] = "名" * 101
+
+    resp = await client.post("/api/v1/models", json=payload)
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_create_model_accepts_name_at_max_length(client):
+    provider = await _create_provider(client)
+    payload = _model_payload(provider["id"])
+    payload["name"] = "名" * 100
+
+    resp = await client.post("/api/v1/models", json=payload)
+
+    body = resp.json()
+    assert body["code"] == 200, body
+    assert body["data"]["name"] == "名" * 100
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("input_price", -0.001),
+        ("output_price", -1),
+        ("context_length", 0),
+        ("currency", ""),
+    ],
+)
+async def test_create_model_rejects_invalid_values(client, field, value):
+    provider = await _create_provider(client)
+    payload = _model_payload(provider["id"])
+    payload[field] = value
+
+    resp = await client.post("/api/v1/models", json=payload)
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_create_model_rejects_overlong_capability(client):
+    provider = await _create_provider(client)
+    payload = _model_payload(provider["id"])
+    payload["capabilities"] = ["a" * 51]
+
+    resp = await client.post("/api/v1/models", json=payload)
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_create_model_rejects_capabilities_exceeding_column_limit(client):
+    provider = await _create_provider(client)
+    payload = _model_payload(provider["id"])
+    # 每个元素都合法，但逗号拼接后超长，仍不能落库
+    payload["capabilities"] = ["a" * 50] * 11
+
+    resp = await client.post("/api/v1/models", json=payload)
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_create_model_accepts_capabilities_joined_at_column_limit(client):
+    provider = await _create_provider(client)
+    payload = _model_payload(provider["id"])
+    # 9 * 50 + 41 + 9 个逗号 = 500，恰好等于列宽
+    payload["capabilities"] = ["a" * 50] * 9 + ["a" * 41]
+
+    resp = await client.post("/api/v1/models", json=payload)
+
+    body = resp.json()
+    assert body["code"] == 200, body
+    assert len(",".join(body["data"]["capabilities"])) == 500
+
+
+async def test_update_model_rejects_invalid_status(client):
+    provider = await _create_provider(client)
+    model = await _create_model(client, provider["id"], f"模型_{uuid.uuid4().hex[:8]}")
+
+    resp = await client.put(f"/api/v1/models/{model['id']}", json={"status": "broken"})
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_update_model_accepts_valid_status(client):
+    provider = await _create_provider(client)
+    model = await _create_model(client, provider["id"], f"模型_{uuid.uuid4().hex[:8]}")
+
+    resp = await client.put(
+        f"/api/v1/models/{model['id']}", json={"status": "rate_limited"}
+    )
+
+    body = resp.json()
+    assert body["code"] == 200, body
+    assert body["data"]["status"] == "rate_limited"
+
+
+async def test_update_model_rejects_overlong_name(client):
+    provider = await _create_provider(client)
+    model = await _create_model(client, provider["id"], f"模型_{uuid.uuid4().hex[:8]}")
+
+    resp = await client.put(f"/api/v1/models/{model['id']}", json={"name": "a" * 101})
+
+    assert resp.status_code == 422, resp.text

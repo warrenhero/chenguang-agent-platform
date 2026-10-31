@@ -1,31 +1,31 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 
 class PromptVariableSchema(BaseModel):
     """Prompt 变量定义"""
-    name: str
-    type: str = "string"       # string / number / boolean / text
-    description: str = ""
+    name: str = Field(min_length=1, max_length=100)
+    type: str = Field(default="string", min_length=1, max_length=50)  # string / number / boolean / text
+    description: str = Field(default="", max_length=500)
     default_value: str | None = None
     required: bool = True
 
 
 class PromptCreate(BaseModel):
-    name: str
-    description: str | None = None
-    category: str = "general"
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=500)
+    category: str = Field(default="general", min_length=1, max_length=50)
     tags: list[str] = []
-    content: str
+    content: str = Field(min_length=1)
     variables: list[PromptVariableSchema] = []
 
 
 class PromptUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    category: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=500)
+    category: str | None = Field(default=None, min_length=1, max_length=50)
     tags: list[str] | None = None
-    content: str | None = None
+    content: str | None = Field(default=None, min_length=1)
     variables: list[PromptVariableSchema] | None = None
 
 
@@ -59,7 +59,7 @@ class PromptVersionRead(BaseModel):
 
 class PublishRequest(BaseModel):
     """发布请求"""
-    changelog: str = ""
+    changelog: str = Field(default="", max_length=500)
 
 
 class RollbackRequest(BaseModel):

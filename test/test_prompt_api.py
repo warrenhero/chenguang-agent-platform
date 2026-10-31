@@ -238,3 +238,93 @@ async def test_version_list_has_unique_versions(client):
 
     assert len(numbers) == len(set(numbers))
     assert sorted(numbers) == ["v1.0", "v1.1", "v1.2"]
+
+
+async def test_create_prompt_rejects_overlong_name(client):
+    payload = _payload()
+    payload["name"] = "p" * 201
+
+    resp = await client.post("/api/v1/prompts", json=payload)
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_create_prompt_accepts_name_at_max_length(client):
+    payload = _payload()
+    payload["name"] = "p" * 200
+
+    resp = await client.post("/api/v1/prompts", json=payload)
+
+    body = resp.json()
+    assert body["code"] == 200, body
+    assert body["data"]["name"] == "p" * 200
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("description", "d" * 501),
+        ("category", "c" * 51),
+        ("category", ""),
+        ("content", ""),
+    ],
+)
+async def test_create_prompt_rejects_invalid_values(client, field, value):
+    payload = _payload()
+    payload[field] = value
+
+    resp = await client.post("/api/v1/prompts", json=payload)
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_create_prompt_rejects_overlong_variable_name(client):
+    payload = _payload()
+    payload["variables"][0]["name"] = "v" * 101
+
+    resp = await client.post("/api/v1/prompts", json=payload)
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_create_prompt_rejects_overlong_variable_description(client):
+    payload = _payload()
+    payload["variables"][0]["description"] = "d" * 501
+
+    resp = await client.post("/api/v1/prompts", json=payload)
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_update_prompt_rejects_overlong_name(client):
+    prompt = await _create_prompt(client)
+
+    resp = await client.put(
+        f"/api/v1/prompts/{prompt['id']}", json={"name": "p" * 201}
+    )
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_publish_rejects_overlong_changelog(client):
+    prompt = await _create_prompt(client)
+
+    resp = await client.post(
+        f"/api/v1/prompts/{prompt['id']}/publish",
+        json={"changelog": "c" * 501},
+    )
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_publish_accepts_changelog_at_max_length(client):
+    prompt = await _create_prompt(client)
+
+    resp = await client.post(
+        f"/api/v1/prompts/{prompt['id']}/publish",
+        json={"changelog": "c" * 500},
+    )
+
+    body = resp.json()
+    assert body["code"] == 200, body
+    assert body["data"]["version"] == "v1.0"
