@@ -72,3 +72,6 @@ app/dist/
 .playwright-mcp/
 playwright-report/
 test-results/
+
+# ===== Superpowers SDD 工作目录 =====
+.superpowers/sdd/
