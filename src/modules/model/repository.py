@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.base_repository import BaseRepository
 from src.modules.model.model import LLMModel
@@ -17,12 +17,6 @@ class ModelRepository(BaseRepository[LLMModel]):
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_by_provider(self, provider_id: int) -> list[LLMModel]:
-        """按供应商查询模型列表"""
-        stmt = select(LLMModel).where(LLMModel.provider_id == provider_id)
-        result = await self.db.execute(stmt)
-        return result.scalars().all()
-
     async def get_default_model(self) -> LLMModel | None:
         """获取默认模型"""
         stmt = select(LLMModel).where(LLMModel.is_default == True)
@@ -30,12 +24,28 @@ class ModelRepository(BaseRepository[LLMModel]):
         return result.scalar_one_or_none()
 
     async def search_page(
-        self, offset: int, limit: int, keyword: str | None
+        self,
+        offset: int,
+        limit: int,
+        keyword: str | None,
+        provider_id: int | None = None,
     ) -> tuple[list[LLMModel], int]:
-        """分页 + 搜索"""
-        return await self.get_page(
-            offset=offset,
-            limit=limit,
-            keyword=keyword,
-            search_fields=self.SEARCH_FIELDS,
-        )
+        """分页 + 搜索，可选按供应商过滤（条件为 AND 组合）"""
+        stmt = select(LLMModel)
+
+        if provider_id is not None:
+            stmt = stmt.where(LLMModel.provider_id == provider_id)
+        if keyword:
+            keyword_conditions = [
+                getattr(LLMModel, field).like(f"%{keyword}%")
+                for field in self.SEARCH_FIELDS
+            ]
+            stmt = stmt.where(or_(*keyword_conditions))
+
+        # 查询总数（复用相同的 WHERE 条件）
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self.db.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(offset).limit(limit).order_by(LLMModel.id.desc())
+        items = list((await self.db.execute(stmt)).scalars().all())
+        return items, total

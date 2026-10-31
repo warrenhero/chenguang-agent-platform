@@ -116,3 +116,72 @@ async def test_user_without_permission_forbidden(client, db_session):
     body = resp.json()
     assert body["code"] == 403
     assert "model:read" in body["message"]
+
+
+async def _create_model(
+    client, provider_id: int, name: str, model_id: str | None = None
+) -> dict:
+    payload = _model_payload(provider_id)
+    payload["name"] = name
+    payload["model_id"] = model_id or f"model-{uuid.uuid4().hex[:12]}"
+    resp = await client.post("/api/v1/models", json=payload)
+    body = resp.json()
+    assert body["code"] == 200, body
+    return body["data"]
+
+
+async def test_list_models_filters_by_provider(client):
+    provider_a = await _create_provider(client)
+    provider_b = await _create_provider(client)
+    await _create_model(client, provider_a["id"], f"模型A1_{uuid.uuid4().hex[:8]}")
+    await _create_model(client, provider_a["id"], f"模型A2_{uuid.uuid4().hex[:8]}")
+    await _create_model(client, provider_b["id"], f"模型B1_{uuid.uuid4().hex[:8]}")
+
+    resp = await client.get("/api/v1/models", params={"provider_id": provider_a["id"]})
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["total"] == 2
+    assert len(data["items"]) == 2
+    assert {item["provider_id"] for item in data["items"]} == {provider_a["id"]}
+
+
+async def test_list_models_provider_and_keyword_compose(client):
+    provider_a = await _create_provider(client)
+    provider_b = await _create_provider(client)
+    token = uuid.uuid4().hex[:8]
+    alpha_a = await _create_model(client, provider_a["id"], f"alpha_{token}")
+    await _create_model(client, provider_a["id"], f"beta_{token}")
+    await _create_model(client, provider_b["id"], f"alpha_{token}")
+
+    resp = await client.get(
+        "/api/v1/models",
+        params={"provider_id": provider_a["id"], "keyword": f"alpha_{token}"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["total"] == 1
+    assert [item["id"] for item in data["items"]] == [alpha_a["id"]]
+
+
+async def test_list_models_empty_result_keeps_requested_pagination(client):
+    provider = await _create_provider(client)
+
+    resp = await client.get(
+        "/api/v1/models",
+        params={"provider_id": provider["id"], "page": 3, "page_size": 5},
+    )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["items"] == []
+    assert data["total"] == 0
+    assert data["page"] == 3
+    assert data["page_size"] == 5
+
+
+async def test_list_models_rejects_page_size_over_limit(client):
+    resp = await client.get("/api/v1/models", params={"page_size": 101})
+
+    assert resp.status_code == 422, resp.text

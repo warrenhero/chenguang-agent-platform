@@ -75,28 +75,18 @@ class ModelService:
         self, params: PageParams, provider_id: int | None = None
     ) -> PageResult[ModelRead]:
         """分页查询模型列表，支持按供应商筛选"""
-        if provider_id:
-            # 按供应商筛选时，不走通用分页（数据量通常较少）
-            models = await self.repo.get_by_provider(provider_id)
-            items = [self._to_read(m) for m in models]
-            return PageResult(
-                items=items,
-                total=len(items),
-                page=1,
-                page_size=len(items),
-            )
-        else:
-            items, total = await self.repo.search_page(
-                offset=params.offset,
-                limit=params.page_size,
-                keyword=params.keyword,
-            )
-            return PageResult(
-                items=[self._to_read(m) for m in items],
-                total=total,
-                page=params.page,
-                page_size=params.page_size,
-            )
+        items, total = await self.repo.search_page(
+            offset=params.offset,
+            limit=params.page_size,
+            keyword=params.keyword,
+            provider_id=provider_id,
+        )
+        return PageResult(
+            items=[self._to_read(m) for m in items],
+            total=total,
+            page=params.page,
+            page_size=params.page_size,
+        )
 
     async def update_model(self, model_id: int, data: ModelUpdate) -> ModelRead:
         model = await self.repo.get_by_id(model_id)
