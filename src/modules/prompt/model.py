@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import (
+    JSON, BigInteger, Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.base_model import BaseModel
@@ -46,6 +48,9 @@ class Prompt(BaseModel):
 class PromptVersion(BaseModel):
     """Prompt 版本表"""
     __tablename__ = "prompt_versions"
+    __table_args__ = (
+        UniqueConstraint("prompt_id", "version", name="uq_prompt_versions_prompt_version"),
+    )
 
     prompt_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("prompts.id", ondelete="CASCADE"),

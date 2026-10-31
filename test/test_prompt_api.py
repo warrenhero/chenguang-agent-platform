@@ -128,3 +128,105 @@ async def test_list_prompts_with_multiple_versions(client):
     assert body["code"] == 200
     ids = [item["id"] for item in body["data"]["items"]]
     assert prompt["id"] in ids
+
+
+async def _publish(client, prompt_id: int, changelog: str = "") -> dict:
+    resp = await client.post(
+        f"/api/v1/prompts/{prompt_id}/publish",
+        json={"changelog": changelog},
+    )
+    return resp.json()
+
+
+async def _create_prompt(client) -> dict:
+    body = (await client.post("/api/v1/prompts", json=_payload())).json()
+    assert body["code"] == 200, body
+    return body["data"]
+
+
+async def test_first_publish_is_v1_0(client):
+    prompt = await _create_prompt(client)
+
+    body = await _publish(client, prompt["id"])
+
+    assert body["code"] == 200, body
+    assert body["data"]["version"] == "v1.0"
+
+
+async def test_consecutive_publishes_increment_minor(client):
+    prompt = await _create_prompt(client)
+
+    versions = [(await _publish(client, prompt["id"]))["data"]["version"] for _ in range(3)]
+
+    assert versions == ["v1.0", "v1.1", "v1.2"]
+
+
+async def test_republish_after_rollback_does_not_reuse_version(client):
+    prompt = await _create_published_prompt(client, publish_times=2)  # v1.0, v1.1
+
+    rollback_resp = await client.post(
+        f"/api/v1/prompts/{prompt['id']}/rollback",
+        json={"version": "v1.0"},
+    )
+    assert rollback_resp.json()["data"]["version"] == "v1.0", rollback_resp.text
+
+    body = await _publish(client, prompt["id"])
+
+    assert body["code"] == 200, body
+    assert body["data"]["version"] == "v1.2"
+
+
+async def test_rollback_by_version_restores_snapshot(client):
+    prompt = await _create_prompt(client)
+    original_content = prompt["content"]
+    assert (await _publish(client, prompt["id"]))["data"]["version"] == "v1.0"
+
+    update_body = (
+        await client.put(f"/api/v1/prompts/{prompt['id']}", json={"content": "第二版内容"})
+    ).json()
+    assert update_body["code"] == 200, update_body
+    assert (await _publish(client, prompt["id"]))["data"]["version"] == "v1.1"
+
+    resp = await client.post(
+        f"/api/v1/prompts/{prompt['id']}/rollback",
+        json={"version": "v1.0"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["code"] == 200
+    assert body["data"]["version"] == "v1.0"
+    assert body["data"]["content"] == original_content
+
+
+async def test_rollback_unknown_version_returns_404(client):
+    prompt = await _create_published_prompt(client, publish_times=1)
+
+    resp = await client.post(
+        f"/api/v1/prompts/{prompt['id']}/rollback",
+        json={"version": "v9.9"},
+    )
+
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["code"] == 404
+
+
+async def test_rollback_rejects_legacy_version_id_payload(client):
+    prompt = await _create_published_prompt(client, publish_times=1)
+
+    resp = await client.post(
+        f"/api/v1/prompts/{prompt['id']}/rollback",
+        json={"version_id": 1},
+    )
+
+    assert resp.status_code == 422, resp.text
+
+
+async def test_version_list_has_unique_versions(client):
+    prompt = await _create_published_prompt(client, publish_times=3)
+
+    versions = (await client.get(f"/api/v1/prompts/{prompt['id']}/versions")).json()["data"]
+    numbers = [v["version"] for v in versions]
+
+    assert len(numbers) == len(set(numbers))
+    assert sorted(numbers) == ["v1.0", "v1.1", "v1.2"]

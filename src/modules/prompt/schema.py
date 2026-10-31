@@ -64,4 +64,7 @@ class PublishRequest(BaseModel):
 
 class RollbackRequest(BaseModel):
     """回滚请求"""
-    version_id: int    # 要回滚到的版本 ID
+    version: str    # 要回滚到的版本号，如 v1.2
+
+    # 拒绝旧的 {"version_id": ...} 请求体，避免静默忽略后误判为目标版本缺失
+    model_config = {"extra": "forbid"}

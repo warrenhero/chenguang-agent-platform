@@ -1,10 +1,13 @@
 from datetime import datetime
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.exceptions import BizException
 from src.core.base_schema import PageResult
 from src.core.deps import PageParams
 from src.modules.prompt.model import Prompt, PromptVersion
-from src.modules.prompt.repository import PromptRepository, PromptVersionRepository
+from src.modules.prompt.repository import (
+    PromptRepository, PromptVersionRepository, parse_version,
+)
 from src.modules.prompt.schema import (
     PromptCreate, PromptUpdate, PromptRead,
     PromptVersionRead, PublishRequest, RollbackRequest,
@@ -102,8 +105,10 @@ class PromptService:
         if not prompt:
             raise BizException(code=42001, message="Prompt 不存在")
 
-        # 1. 计算新版本号
-        new_version = self._next_version(prompt.version)
+        # 1. 基于已有版本快照计算新版本号（首次发布为 v1.0）
+        new_version = self._next_version(
+            await self.version_repo.get_max_version(prompt_id)
+        )
 
         # 2. 将旧版本的 is_current 设为 False
         await self.version_repo.clear_current(prompt_id)
@@ -118,7 +123,12 @@ class PromptService:
             published_by=current_user,
             published_at=datetime.now(),
         )
-        await self.version_repo.create(version)
+        try:
+            await self.version_repo.create(version)
+        except IntegrityError as exc:
+            # 并发发布撞上 (prompt_id, version) 唯一约束：回滚失败事务后转为业务异常
+            await self.repo.db.rollback()
+            raise BizException(code=409, message="版本冲突，请重试") from exc
 
         # 4. 更新 Prompt 主表
         prompt.version = new_version
@@ -139,9 +149,9 @@ class PromptService:
             raise BizException(code=42001, message="Prompt 不存在")
 
         # 1. 查找目标版本
-        target_version = await self.version_repo.get_by_id(data.version_id)
-        if not target_version or target_version.prompt_id != prompt_id:
-            raise BizException(code=42002, message="版本不存在")
+        target_version = await self.version_repo.get_by_version(prompt_id, data.version)
+        if not target_version:
+            raise BizException(code=404, message="版本不存在")
 
         # 2. 用目标版本的内容覆盖当前内容
         prompt.content = target_version.content
@@ -156,12 +166,10 @@ class PromptService:
         return self._to_read(prompt)
 
     @staticmethod
-    def _next_version(current: str) -> str:
-        """版本号递增：v1.2 → v1.3"""
-        try:
-            prefix = current[0]  # "v"
-            parts = current[1:].split(".")
-            major, minor = int(parts[0]), int(parts[1])
-            return f"{prefix}{major}.{minor + 1}"
-        except (IndexError, ValueError):
+    def _next_version(current: str | None) -> str:
+        """基于已有最大版本号递增 minor：v1.2 → v1.3；无版本或解析失败时为 v1.0"""
+        parsed = parse_version(current) if current else None
+        if parsed is None:
             return "v1.0"
+        major, minor = parsed
+        return f"v{major}.{minor + 1}"
