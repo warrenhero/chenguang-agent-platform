@@ -328,3 +328,231 @@ async def test_publish_accepts_changelog_at_max_length(client):
     body = resp.json()
     assert body["code"] == 200, body
     assert body["data"]["version"] == "v1.0"
+
+
+async def _get_versions(client, prompt_id: int) -> list[dict]:
+    resp = await client.get(f"/api/v1/prompts/{prompt_id}/versions")
+    assert resp.status_code == 200, resp.text
+    return resp.json()["data"]
+
+
+async def test_prompt_crud_lifecycle(client):
+    payload = _payload()
+    create_body = (await client.post("/api/v1/prompts", json=payload)).json()
+    assert create_body["code"] == 200, create_body
+    created = create_body["data"]
+    assert created["name"] == payload["name"]
+    assert created["description"] == payload["description"]
+    assert created["category"] == payload["category"]
+    assert created["tags"] == payload["tags"]
+    assert created["content"] == payload["content"]
+    assert created["variables"] == payload["variables"]
+    assert created["version"] == "v0.1"
+    assert created["status"] == "draft"
+
+    detail = (await client.get(f"/api/v1/prompts/{created['id']}")).json()["data"]
+    assert detail == created
+
+    new_tags = ["updated", "crud"]
+    update_body = (
+        await client.put(
+            f"/api/v1/prompts/{created['id']}",
+            json={
+                "name": f"更新_{uuid.uuid4().hex[:8]}",
+                "description": "更新后的描述",
+                "category": "updated",
+                "tags": new_tags,
+                "content": "更新后的内容 {name}",
+            },
+        )
+    ).json()
+    assert update_body["code"] == 200, update_body
+    updated = update_body["data"]
+    assert updated["description"] == "更新后的描述"
+    assert updated["category"] == "updated"
+    assert updated["tags"] == new_tags
+    assert updated["content"] == "更新后的内容 {name}"
+
+    updated_detail = (
+        await client.get(f"/api/v1/prompts/{created['id']}")
+    ).json()["data"]
+    assert updated_detail == updated
+
+    delete_resp = await client.delete(f"/api/v1/prompts/{created['id']}")
+    assert delete_resp.status_code == 200, delete_resp.text
+    assert delete_resp.json()["code"] == 200
+
+    listed = (
+        await client.get("/api/v1/prompts", params={"keyword": updated["name"]})
+    ).json()["data"]
+    assert listed["total"] == 0
+    assert listed["items"] == []
+
+
+async def test_list_prompts_paginates(client):
+    token = uuid.uuid4().hex[:8]
+    created = []
+    for i in range(3):
+        payload = _payload()
+        payload["name"] = f"分页_{i}_{token}"
+        body = (await client.post("/api/v1/prompts", json=payload)).json()
+        assert body["code"] == 200, body
+        created.append(body["data"])
+
+    first = (
+        await client.get(
+            "/api/v1/prompts",
+            params={"keyword": token, "page": 1, "page_size": 2},
+        )
+    ).json()["data"]
+    second = (
+        await client.get(
+            "/api/v1/prompts",
+            params={"keyword": token, "page": 2, "page_size": 2},
+        )
+    ).json()["data"]
+
+    assert first["total"] == 3
+    assert second["total"] == 3
+    assert [item["id"] for item in first["items"]] == [
+        created[2]["id"],
+        created[1]["id"],
+    ]
+    assert [item["id"] for item in second["items"]] == [created[0]["id"]]
+
+
+async def test_list_prompts_keyword_matches_name_and_category(client):
+    token = uuid.uuid4().hex[:8]
+    payload_name = _payload()
+    payload_name["name"] = f"关键词_{token}"
+    by_name = (await client.post("/api/v1/prompts", json=payload_name)).json()["data"]
+
+    payload_category = _payload()
+    payload_category["category"] = f"cat_{token}"
+    by_category = (
+        await client.post("/api/v1/prompts", json=payload_category)
+    ).json()["data"]
+
+    await client.post("/api/v1/prompts", json=_payload())
+
+    resp = await client.get("/api/v1/prompts", params={"keyword": token})
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["total"] == 2
+    assert {item["id"] for item in data["items"]} == {
+        by_name["id"],
+        by_category["id"],
+    }
+
+
+async def test_prompt_tags_and_variables_round_trip(client):
+    payload = _payload()
+    payload["tags"] = ["a", "b", "中文标签"]
+    payload["variables"] = [
+        {
+            "name": "name",
+            "type": "string",
+            "description": "",
+            "default_value": "世界",
+            "required": True,
+        },
+        {
+            "name": "count",
+            "type": "number",
+            "description": "次数",
+            "default_value": None,
+            "required": False,
+        },
+    ]
+    created = (await client.post("/api/v1/prompts", json=payload)).json()["data"]
+
+    detail = (await client.get(f"/api/v1/prompts/{created['id']}")).json()["data"]
+    assert detail["tags"] == payload["tags"]
+    assert detail["variables"] == payload["variables"]
+
+    new_tags = ["c"]
+    new_variables = [
+        {
+            "name": "topic",
+            "type": "text",
+            "description": "主题",
+            "default_value": None,
+            "required": True,
+        }
+    ]
+    update_body = (
+        await client.put(
+            f"/api/v1/prompts/{created['id']}",
+            json={"tags": new_tags, "variables": new_variables},
+        )
+    ).json()
+    assert update_body["code"] == 200, update_body
+
+    updated_detail = (
+        await client.get(f"/api/v1/prompts/{created['id']}")
+    ).json()["data"]
+    assert updated_detail["tags"] == new_tags
+    assert updated_detail["variables"] == new_variables
+
+
+async def test_publish_snapshots_content_until_next_publish(client):
+    prompt = await _create_prompt(client)
+    published_content = "发布时的内容"
+    update_body = (
+        await client.put(
+            f"/api/v1/prompts/{prompt['id']}", json={"content": published_content}
+        )
+    ).json()
+    assert update_body["code"] == 200, update_body
+    assert (await _publish(client, prompt["id"]))["data"]["version"] == "v1.0"
+
+    later_body = (
+        await client.put(
+            f"/api/v1/prompts/{prompt['id']}", json={"content": "发布之后又改的内容"}
+        )
+    ).json()
+    assert later_body["code"] == 200, later_body
+
+    versions = await _get_versions(client, prompt["id"])
+    snapshot = next(v for v in versions if v["version"] == "v1.0")
+    assert snapshot["content"] == published_content
+
+    detail = (await client.get(f"/api/v1/prompts/{prompt['id']}")).json()["data"]
+    assert detail["content"] == "发布之后又改的内容"
+
+
+async def test_version_list_is_newest_first(client):
+    prompt = await _create_published_prompt(client, publish_times=3)
+
+    versions = await _get_versions(client, prompt["id"])
+
+    assert [v["version"] for v in versions] == ["v1.2", "v1.1", "v1.0"]
+
+
+async def test_publish_keeps_single_current_version(client):
+    prompt = await _create_published_prompt(client, publish_times=3)
+
+    versions = await _get_versions(client, prompt["id"])
+    current = [v for v in versions if v["is_current"]]
+
+    assert len(current) == 1
+    assert current[0]["version"] == "v1.2"
+
+
+async def test_rollback_moves_current_marker_to_target_version(client):
+    prompt = await _create_published_prompt(client, publish_times=3)
+
+    rollback_body = (
+        await client.post(
+            f"/api/v1/prompts/{prompt['id']}/rollback",
+            json={"version": "v1.1"},
+        )
+    ).json()
+    assert rollback_body["code"] == 200, rollback_body
+    assert rollback_body["data"]["version"] == "v1.1"
+
+    versions = await _get_versions(client, prompt["id"])
+    current = [v for v in versions if v["is_current"]]
+    assert len(current) == 1
+    assert current[0]["version"] == "v1.1"

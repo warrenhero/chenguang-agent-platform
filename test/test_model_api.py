@@ -303,3 +303,174 @@ async def test_update_model_rejects_capabilities_exceeding_column_limit(client):
     )
 
     assert resp.status_code == 422, resp.text
+
+
+async def test_create_model_echoes_all_fields(client):
+    provider = await _create_provider(client)
+    payload = _model_payload(provider["id"])
+    payload.update(
+        capabilities=["streaming", "vision"],
+        context_length=16384,
+        input_price=0.001,
+        output_price=0.002,
+        currency="CNY",
+        description="字段回显模型",
+    )
+
+    resp = await client.post("/api/v1/models", json=payload)
+
+    body = resp.json()
+    assert body["code"] == 200, body
+    data = body["data"]
+    assert data["name"] == payload["name"]
+    assert data["model_id"] == payload["model_id"]
+    assert data["provider_id"] == provider["id"]
+    assert data["provider_name"] == provider["name"]
+    assert data["capabilities"] == ["streaming", "vision"]
+    assert data["context_length"] == 16384
+    assert data["status"] == "available"
+    assert data["input_price"] == 0.001
+    assert data["output_price"] == 0.002
+    assert data["currency"] == "CNY"
+    assert data["is_default"] is False
+    assert data["description"] == "字段回显模型"
+
+
+async def test_get_model_detail_matches_created(client):
+    provider = await _create_provider(client)
+    model = await _create_model(client, provider["id"], f"模型_{uuid.uuid4().hex[:8]}")
+
+    resp = await client.get(f"/api/v1/models/{model['id']}")
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"] == model
+
+
+async def test_update_model_returns_updated_fields(client):
+    provider = await _create_provider(client)
+    model = await _create_model(client, provider["id"], f"模型_{uuid.uuid4().hex[:8]}")
+    new_name = f"新名称_{uuid.uuid4().hex[:8]}"
+
+    resp = await client.put(
+        f"/api/v1/models/{model['id']}",
+        json={
+            "name": new_name,
+            "capabilities": ["function_call", "vision"],
+            "context_length": 32768,
+            "input_price": 0.003,
+            "output_price": 0.006,
+            "currency": "CNY",
+            "description": "更新后的描述",
+        },
+    )
+
+    body = resp.json()
+    assert body["code"] == 200, body
+    data = body["data"]
+    assert data["name"] == new_name
+    assert data["capabilities"] == ["function_call", "vision"]
+    assert data["context_length"] == 32768
+    assert data["input_price"] == 0.003
+    assert data["output_price"] == 0.006
+    assert data["currency"] == "CNY"
+    assert data["description"] == "更新后的描述"
+
+    detail = (await client.get(f"/api/v1/models/{model['id']}")).json()["data"]
+    assert detail == data
+
+
+async def test_setting_default_model_unsets_previous_default(client):
+    provider = await _create_provider(client)
+    first = await _create_model(client, provider["id"], f"模型_{uuid.uuid4().hex[:8]}")
+    second = await _create_model(client, provider["id"], f"模型_{uuid.uuid4().hex[:8]}")
+
+    first_resp = await client.put(
+        f"/api/v1/models/{first['id']}", json={"is_default": True}
+    )
+    assert first_resp.json()["data"]["is_default"] is True
+
+    second_resp = await client.put(
+        f"/api/v1/models/{second['id']}", json={"is_default": True}
+    )
+    assert second_resp.json()["data"]["is_default"] is True
+
+    first_after = (await client.get(f"/api/v1/models/{first['id']}")).json()["data"]
+    second_after = (await client.get(f"/api/v1/models/{second['id']}")).json()["data"]
+    assert first_after["is_default"] is False
+    assert second_after["is_default"] is True
+
+
+async def test_delete_model_removes_it(client):
+    provider = await _create_provider(client)
+    model = await _create_model(client, provider["id"], f"模型_{uuid.uuid4().hex[:8]}")
+
+    resp = await client.delete(f"/api/v1/models/{model['id']}")
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["code"] == 200
+
+    get_resp = await client.get(f"/api/v1/models/{model['id']}")
+    assert get_resp.status_code == 404, get_resp.text
+    assert get_resp.json()["code"] == 404
+
+
+async def test_list_models_paginates(client):
+    provider = await _create_provider(client)
+    created = [
+        await _create_model(client, provider["id"], f"模型{i}_{uuid.uuid4().hex[:8]}")
+        for i in range(3)
+    ]
+
+    first = (
+        await client.get(
+            "/api/v1/models",
+            params={"provider_id": provider["id"], "page": 1, "page_size": 2},
+        )
+    ).json()["data"]
+    second = (
+        await client.get(
+            "/api/v1/models",
+            params={"provider_id": provider["id"], "page": 2, "page_size": 2},
+        )
+    ).json()["data"]
+
+    assert first["total"] == 3
+    assert second["total"] == 3
+    assert [item["id"] for item in first["items"]] == [
+        created[2]["id"],
+        created[1]["id"],
+    ]
+    assert [item["id"] for item in second["items"]] == [created[0]["id"]]
+
+
+async def test_list_models_keyword_searches_name_and_model_id(client):
+    provider = await _create_provider(client)
+    token = uuid.uuid4().hex[:8]
+    by_name = await _create_model(client, provider["id"], f"检索_{token}")
+    by_model_id = await _create_model(
+        client,
+        provider["id"],
+        f"普通_{uuid.uuid4().hex[:8]}",
+        model_id=f"ref-{token}",
+    )
+    await _create_model(client, provider["id"], f"无关_{uuid.uuid4().hex[:8]}")
+
+    resp = await client.get("/api/v1/models", params={"keyword": token})
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["total"] == 2
+    assert {item["id"] for item in data["items"]} == {by_name["id"], by_model_id["id"]}
+
+
+async def test_list_models_returns_provider_name(client):
+    provider = await _create_provider(client)
+    await _create_model(client, provider["id"], f"模型_{uuid.uuid4().hex[:8]}")
+
+    resp = await client.get(
+        "/api/v1/models", params={"provider_id": provider["id"]}
+    )
+
+    assert resp.status_code == 200, resp.text
+    items = resp.json()["data"]["items"]
+    assert [item["provider_name"] for item in items] == [provider["name"]]
