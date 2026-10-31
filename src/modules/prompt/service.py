@@ -53,7 +53,7 @@ class PromptService:
     async def get_prompt(self, prompt_id: int) -> PromptRead:
         prompt = await self.repo.get_by_id(prompt_id)
         if not prompt:
-            raise BizException(code=42001, message="Prompt 不存在")
+            raise BizException(code=404, message="Prompt 不存在")
         return self._to_read(prompt)
 
     async def list_prompts(self, params: PageParams) -> PageResult[PromptRead]:
@@ -73,7 +73,7 @@ class PromptService:
     async def update_prompt(self, prompt_id: int, data: PromptUpdate) -> PromptRead:
         prompt = await self.repo.get_by_id(prompt_id)
         if not prompt:
-            raise BizException(code=42001, message="Prompt 不存在")
+            raise BizException(code=404, message="Prompt 不存在")
 
         if data.name is not None:
             prompt.name = data.name
@@ -94,7 +94,7 @@ class PromptService:
     async def delete_prompt(self, prompt_id: int) -> None:
         prompt = await self.repo.get_by_id(prompt_id)
         if not prompt:
-            raise BizException(code=42001, message="Prompt 不存在")
+            raise BizException(code=404, message="Prompt 不存在")
         await self.repo.delete_by_id(prompt_id)
 
     async def publish(
@@ -103,7 +103,7 @@ class PromptService:
         """发布新版本"""
         prompt = await self.repo.get_by_id(prompt_id)
         if not prompt:
-            raise BizException(code=42001, message="Prompt 不存在")
+            raise BizException(code=404, message="Prompt 不存在")
 
         # 1. 基于已有版本快照计算新版本号（首次发布为 v1.0）
         new_version = self._next_version(
@@ -146,7 +146,7 @@ class PromptService:
         """回滚到指定版本"""
         prompt = await self.repo.get_by_id(prompt_id)
         if not prompt:
-            raise BizException(code=42001, message="Prompt 不存在")
+            raise BizException(code=404, message="Prompt 不存在")
 
         # 1. 查找目标版本
         target_version = await self.version_repo.get_by_version(prompt_id, data.version)

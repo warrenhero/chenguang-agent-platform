@@ -11,7 +11,7 @@ class BizException(Exception):
 
 
 # 业务码与 HTTP 状态保持一致，网关/前端可依据状态码做统一处理
-_HTTP_STATUS = {401: 401, 403: 403, 404: 404, 429: 429}
+_HTTP_STATUS = {401: 401, 403: 403, 404: 404, 409: 409, 429: 429}
 
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(BizException)

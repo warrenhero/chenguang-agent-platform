@@ -44,7 +44,7 @@ async def test_prompt_endpoints_require_auth(anon_client):
         ("DELETE", "/api/v1/prompts/1", None),
         ("POST", "/api/v1/prompts/1/publish", {"changelog": "x"}),
         ("GET", "/api/v1/prompts/1/versions", None),
-        ("POST", "/api/v1/prompts/1/rollback", {"version_id": 1}),
+        ("POST", "/api/v1/prompts/1/rollback", {"version": "v1.0"}),
     ]
 
     for method, path, json in cases:
@@ -62,6 +62,13 @@ async def test_bootstrap_seeds_prompt_permissions(db_session):
         "prompt:update",
         "prompt:delete",
     } <= codes
+
+
+async def test_get_missing_prompt_returns_404(client):
+    resp = await client.get("/api/v1/prompts/999999")
+
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["code"] == 404
 
 
 async def test_prompt_audit_fields_record_superuser(client, superuser_headers):
@@ -115,7 +122,8 @@ async def test_delete_prompt_with_versions_cascades(client, db_session):
     assert result.scalars().all() == []
 
     get_resp = await client.get(f"/api/v1/prompts/{prompt['id']}")
-    assert get_resp.json()["code"] == 42001, get_resp.text
+    assert get_resp.status_code == 404, get_resp.text
+    assert get_resp.json()["code"] == 404
 
 
 async def test_list_prompts_with_multiple_versions(client):

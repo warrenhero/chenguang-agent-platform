@@ -35,12 +35,12 @@ class ModelService:
         # 1. 检查 model_id 是否已存在
         existing = await self.repo.get_by_model_id(data.model_id)
         if existing:
-            raise BizException(code=41001, message=f"模型 '{data.model_id}' 已存在")
+            raise BizException(code=400, message=f"模型 '{data.model_id}' 已存在")
 
         # 2. 检查供应商是否存在
         provider = await self.provider_repo.get_by_id(data.provider_id)
         if not provider:
-            raise BizException(code=41002, message="供应商不存在")
+            raise BizException(code=400, message="供应商不存在")
 
         # 3. 如果设为默认，先取消其他默认
         if data.is_default:
@@ -68,7 +68,7 @@ class ModelService:
     async def get_model(self, model_id: int) -> ModelRead:
         model = await self.repo.get_by_id(model_id)
         if not model:
-            raise BizException(code=41003, message="模型不存在")
+            raise BizException(code=404, message="模型不存在")
         return self._to_read(model)
 
     async def list_models(
@@ -101,7 +101,7 @@ class ModelService:
     async def update_model(self, model_id: int, data: ModelUpdate) -> ModelRead:
         model = await self.repo.get_by_id(model_id)
         if not model:
-            raise BizException(code=41003, message="模型不存在")
+            raise BizException(code=404, message="模型不存在")
 
         if data.name is not None:
             model.name = data.name
@@ -133,5 +133,5 @@ class ModelService:
     async def delete_model(self, model_id: int) -> None:
         model = await self.repo.get_by_id(model_id)
         if not model:
-            raise BizException(code=41003, message="模型不存在")
+            raise BizException(code=404, message="模型不存在")
         await self.repo.delete_by_id(model_id)

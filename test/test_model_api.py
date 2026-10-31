@@ -3,10 +3,13 @@ import uuid
 import pytest
 
 from src.core.bootstrap import DEFAULT_PERMISSIONS, apply_rbac_seed
+from src.core.exceptions import _HTTP_STATUS
 from src.modules.user.model import User
 from src.utils.jwt_utils import encode_jwt
 
 pytestmark = pytest.mark.asyncio
+
+MISSING_ID = 999_999_999
 
 
 def _model_payload(provider_id: int = 1) -> dict:
@@ -49,6 +52,51 @@ async def test_bootstrap_seeds_model_permissions(db_session):
         "model:update",
         "model:delete",
     } <= codes
+
+
+async def _create_provider(client) -> dict:
+    resp = await client.post(
+        "/api/v1/providers",
+        json={
+            "name": f"供应商_{uuid.uuid4().hex[:8]}",
+            "type": "openai",
+            "endpoint": "https://api.example.com/v1",
+            "api_key": "sk-plaintext-secret",
+        },
+    )
+    body = resp.json()
+    assert body["code"] == 200, body
+    return body["data"]
+
+
+async def test_conflict_code_maps_to_http_409():
+    assert _HTTP_STATUS[409] == 409
+
+
+async def test_get_missing_model_returns_404(client):
+    resp = await client.get(f"/api/v1/models/{MISSING_ID}")
+
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["code"] == 404
+
+
+async def test_create_duplicate_model_id_returns_400(client):
+    provider = await _create_provider(client)
+    payload = _model_payload(provider["id"])
+    created = await client.post("/api/v1/models", json=payload)
+    assert created.json()["code"] == 200, created.text
+
+    resp = await client.post("/api/v1/models", json=payload)
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["code"] == 400
+
+
+async def test_create_model_with_missing_provider_returns_400(client):
+    resp = await client.post("/api/v1/models", json=_model_payload(MISSING_ID))
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["code"] == 400
 
 
 async def test_user_without_permission_forbidden(client, db_session):
