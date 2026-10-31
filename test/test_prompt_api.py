@@ -71,6 +71,13 @@ async def test_get_missing_prompt_returns_404(client):
     assert resp.json()["code"] == 404
 
 
+async def test_get_versions_of_missing_prompt_returns_404(client):
+    resp = await client.get("/api/v1/prompts/999999/versions")
+
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["code"] == 404
+
+
 async def test_prompt_audit_fields_record_superuser(client, superuser_headers):
     username = _username(superuser_headers)
 

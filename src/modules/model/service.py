@@ -1,3 +1,4 @@
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.exceptions import BizException
 from src.core.base_schema import PageResult
@@ -49,7 +50,7 @@ class ModelService:
                 current_default.is_default = False
                 await self.repo.update(current_default)
 
-        # 4. 创建模型
+        # 4. 创建模型；唯一约束兜底并发写入
         model = LLMModel(
             name=data.name,
             model_id=data.model_id,
@@ -62,7 +63,10 @@ class ModelService:
             is_default=data.is_default,
             description=data.description,
         )
-        model = await self.repo.create(model)
+        try:
+            model = await self.repo.create(model)
+        except IntegrityError:
+            raise BizException(code=400, message=f"模型 '{data.model_id}' 已存在")
         return self._to_read(model)
 
     async def get_model(self, model_id: int) -> ModelRead:

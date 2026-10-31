@@ -139,6 +139,9 @@ class PromptService:
 
     async def get_versions(self, prompt_id: int) -> list[PromptVersionRead]:
         """获取版本列表"""
+        prompt = await self.repo.get_by_id(prompt_id)
+        if not prompt:
+            raise BizException(code=404, message="Prompt 不存在")
         versions = await self.version_repo.get_versions_by_prompt(prompt_id)
         return [PromptVersionRead.model_validate(v) for v in versions]
 

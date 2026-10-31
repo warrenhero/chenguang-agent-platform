@@ -4,6 +4,8 @@ import pytest
 
 from src.core.bootstrap import DEFAULT_PERMISSIONS, apply_rbac_seed
 from src.core.exceptions import _HTTP_STATUS
+from src.modules.model.model import LLMModel
+from src.modules.model.repository import ModelRepository
 from src.modules.user.model import User
 from src.utils.jwt_utils import encode_jwt
 
@@ -85,6 +87,33 @@ async def test_create_duplicate_model_id_returns_400(client):
     payload = _model_payload(provider["id"])
     created = await client.post("/api/v1/models", json=payload)
     assert created.json()["code"] == 200, created.text
+
+    resp = await client.post("/api/v1/models", json=payload)
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["code"] == 400
+
+
+async def test_create_model_concurrent_duplicate_model_id_returns_400(
+    client, db_session, monkeypatch
+):
+    provider = await _create_provider(client)
+    payload = _model_payload(provider["id"])
+
+    # 模拟并发：另一请求已把同 model_id 落库，但 service 的预检查没看到
+    db_session.add(
+        LLMModel(
+            name="并发先落库",
+            model_id=payload["model_id"],
+            provider_id=provider["id"],
+        )
+    )
+    await db_session.flush()
+
+    async def _missing(self, model_id):
+        return None
+
+    monkeypatch.setattr(ModelRepository, "get_by_model_id", _missing)
 
     resp = await client.post("/api/v1/models", json=payload)
 
