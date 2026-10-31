@@ -6,6 +6,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 import src.modules.permission.model
+import src.modules.provider.model
 import src.modules.role.model
 import src.modules.user.model  # noqa: F401  每新增模块在此导入
 from alembic import context
@@ -16,7 +17,6 @@ from src.core.base_model import Base
 # 加载 .env 配置
 from src.core.config import get_settings
 
-# import src.modules.user.model
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
