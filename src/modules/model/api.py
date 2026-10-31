@@ -2,10 +2,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.infra.database import get_db
 from src.core.base_schema import ResponseSchema, PageResult
-from src.core.deps import PageParams, get_current_user, require_permission
+from src.core.deps import PageParams, require_permission
 from src.modules.model.schema import ModelCreate, ModelUpdate, ModelRead
 from src.modules.model.service import ModelService
-from src.modules.user.model import User
 
 router = APIRouter(prefix="/models", tags=["模型管理"])
 
@@ -22,10 +21,9 @@ def get_model_service(db: AsyncSession = Depends(get_db)) -> ModelService:
 )
 async def create_model(
     data: ModelCreate,
-    current_user: User = Depends(get_current_user),
     svc: ModelService = Depends(get_model_service),
 ):
-    result = await svc.create_model(data, current_user.username)
+    result = await svc.create_model(data)
     return ResponseSchema(data=result)
 
 

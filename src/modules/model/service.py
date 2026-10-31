@@ -31,9 +31,7 @@ class ModelService:
             description=model.description,
         )
 
-    async def create_model(
-        self, data: ModelCreate, current_user: str | None = None
-    ) -> ModelRead:
+    async def create_model(self, data: ModelCreate) -> ModelRead:
         # 1. 检查 model_id 是否已存在
         existing = await self.repo.get_by_model_id(data.model_id)
         if existing:
