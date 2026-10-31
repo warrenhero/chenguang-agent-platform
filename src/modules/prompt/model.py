@@ -34,11 +34,12 @@ class Prompt(BaseModel):
         String(100), nullable=True, comment="创建者"
     )
 
-    # 关联版本列表
+    # 关联版本列表：删除 Prompt 时由数据库 ON DELETE CASCADE 清理版本，避免逐条加载
     versions: Mapped[list["PromptVersion"]] = relationship(
         "PromptVersion", back_populates="prompt",
         order_by="PromptVersion.id.desc()",
-        lazy="selectin",
+        cascade="all, delete-orphan", passive_deletes=True,
+        lazy="select",
     )
 
 

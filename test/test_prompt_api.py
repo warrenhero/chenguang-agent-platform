@@ -1,8 +1,10 @@
 import uuid
 
 import pytest
+from sqlalchemy import select
 
 from src.core.bootstrap import DEFAULT_PERMISSIONS, apply_rbac_seed
+from src.modules.prompt.model import PromptVersion
 from src.utils.jwt_utils import verify_jwt
 
 pytestmark = pytest.mark.asyncio
@@ -82,3 +84,47 @@ async def test_prompt_audit_fields_record_superuser(client, superuser_headers):
     versions = versions_resp.json()["data"]
     current = next(v for v in versions if v["is_current"])
     assert current["published_by"] == username
+
+
+async def _create_published_prompt(client, publish_times: int = 1) -> dict:
+    create_body = (await client.post("/api/v1/prompts", json=_payload())).json()
+    assert create_body["code"] == 200, create_body
+    prompt = create_body["data"]
+    for i in range(publish_times):
+        publish_body = (
+            await client.post(
+                f"/api/v1/prompts/{prompt['id']}/publish",
+                json={"changelog": f"发布 {i + 1}"},
+            )
+        ).json()
+        assert publish_body["code"] == 200, publish_body
+    return prompt
+
+
+async def test_delete_prompt_with_versions_cascades(client, db_session):
+    prompt = await _create_published_prompt(client, publish_times=2)
+
+    resp = await client.delete(f"/api/v1/prompts/{prompt['id']}")
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["code"] == 200
+
+    result = await db_session.execute(
+        select(PromptVersion).where(PromptVersion.prompt_id == prompt["id"])
+    )
+    assert result.scalars().all() == []
+
+    get_resp = await client.get(f"/api/v1/prompts/{prompt['id']}")
+    assert get_resp.json()["code"] == 42001, get_resp.text
+
+
+async def test_list_prompts_with_multiple_versions(client):
+    prompt = await _create_published_prompt(client, publish_times=3)
+
+    resp = await client.get("/api/v1/prompts")
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["code"] == 200
+    ids = [item["id"] for item in body["data"]["items"]]
+    assert prompt["id"] in ids
