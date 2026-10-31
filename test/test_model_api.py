@@ -291,3 +291,15 @@ async def test_update_model_rejects_overlong_name(client):
     resp = await client.put(f"/api/v1/models/{model['id']}", json={"name": "a" * 101})
 
     assert resp.status_code == 422, resp.text
+
+
+async def test_update_model_rejects_capabilities_exceeding_column_limit(client):
+    provider = await _create_provider(client)
+    model = await _create_model(client, provider["id"], f"模型_{uuid.uuid4().hex[:8]}")
+
+    resp = await client.put(
+        f"/api/v1/models/{model['id']}",
+        json={"capabilities": ["a" * 50] * 11},
+    )
+
+    assert resp.status_code == 422, resp.text

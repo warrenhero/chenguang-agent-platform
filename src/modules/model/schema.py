@@ -4,8 +4,17 @@ from pydantic import BaseModel, Field, field_validator
 
 ModelStatus = Literal["available", "unavailable", "rate_limited"]
 
-# 单个能力标签；拼接后总长度另由校验器限制在数据库列宽 500 以内
+# 单个能力标签；拼接后总长度另由校验器限制在数据库列宽以内
 Capability = Annotated[str, Field(min_length=1, max_length=50)]
+CAPABILITIES_MAX_LENGTH = 500
+
+
+def _validate_capabilities_joined(
+    values: list[str] | None,
+) -> list[str] | None:
+    if values is not None and len(",".join(values)) > CAPABILITIES_MAX_LENGTH:
+        raise ValueError("capabilities 逗号拼接后不能超过 500 个字符")
+    return values
 
 
 class ModelCreate(BaseModel):
@@ -22,10 +31,10 @@ class ModelCreate(BaseModel):
 
     @field_validator("capabilities")
     @classmethod
-    def _capabilities_fit_column(cls, values: list[str]) -> list[str]:
-        if len(",".join(values)) > 500:
-            raise ValueError("capabilities 逗号拼接后不能超过 500 个字符")
-        return values
+    def _capabilities_fit_column(
+        cls, values: list[str] | None
+    ) -> list[str] | None:
+        return _validate_capabilities_joined(values)
 
 
 class ModelUpdate(BaseModel):
@@ -41,10 +50,10 @@ class ModelUpdate(BaseModel):
 
     @field_validator("capabilities")
     @classmethod
-    def _capabilities_fit_column(cls, values: list[str] | None) -> list[str] | None:
-        if values is not None and len(",".join(values)) > 500:
-            raise ValueError("capabilities 逗号拼接后不能超过 500 个字符")
-        return values
+    def _capabilities_fit_column(
+        cls, values: list[str] | None
+    ) -> list[str] | None:
+        return _validate_capabilities_joined(values)
 
 
 class ModelRead(BaseModel):
